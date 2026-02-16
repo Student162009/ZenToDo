@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -16,6 +15,7 @@ class _ZenToDoState extends State<ZenToDo> {
   String _currentLang = 'ru';
   List<Map<String, dynamic>> _tasks = [];
   final TextEditingController _newTaskController = TextEditingController();
+  bool _isEditing = false; // ← НОВОЕ: флаг редактирования
 
   @override
   void initState() {
@@ -35,7 +35,6 @@ class _ZenToDoState extends State<ZenToDo> {
               'id': parts[0],
               'text': parts[1],
               'done': parts[2] == 'true',
-              'createdAt': DateTime.now().toIso8601String(),
             };
           }).toList();
     });
@@ -56,11 +55,13 @@ class _ZenToDoState extends State<ZenToDo> {
           'id': DateTime.now().millisecondsSinceEpoch.toString(),
           'text': _newTaskController.text.trim(),
           'done': false,
-          'createdAt': DateTime.now().toIso8601String(),
         });
       });
       _newTaskController.clear();
       _saveData();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Задача добавлена! ✅')),
+      );
     }
   }
 
@@ -78,15 +79,6 @@ class _ZenToDoState extends State<ZenToDo> {
     _saveData();
   }
 
-  void _updateTask(int index, String newText) {
-    if (newText.trim().isNotEmpty) {
-      setState(() {
-        _tasks[index]['text'] = newText.trim();
-      });
-      _saveData();
-    }
-  }
-
   String _toTitleCase(String text) {
     return text.split(' ').map((word) {
       if (word.isEmpty) return word;
@@ -99,7 +91,7 @@ class _ZenToDoState extends State<ZenToDo> {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'ZenToDo',
-      theme: ThemeData(useMaterial3: true, fontFamily: 'Inter'),
+      theme: ThemeData(useMaterial3: true),
       home: Scaffold(
         body: Container(
           decoration: BoxDecoration(
@@ -108,14 +100,13 @@ class _ZenToDoState extends State<ZenToDo> {
           child: SafeArea(
             child: Column(
               children: [
-                // 🖼️ HEADER С АВАТАРКОЙ
+                // 🖼️ HEADER
                 Padding(
                   padding: EdgeInsets.all(24),
                   child: Column(
                     children: [
                       Row(
                         children: [
-                          // ТВОЯ JPG АВАТАРКА
                           CircleAvatar(
                             radius: 35,
                             backgroundImage: AssetImage('assets/images/avatar.jpg'),
@@ -159,13 +150,12 @@ class _ZenToDoState extends State<ZenToDo> {
                                 contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 16),
                               ),
                               style: TextStyle(color: Colors.white, fontSize: 18),
-                              maxLength: 200,
-                              onSubmitted: (_) => _addTask(),
+                              onSubmitted: (_) => _addTask(), // ← ENTER = добавить
                             ),
                           ),
                           SizedBox(width: 12),
                           FloatingActionButton(
-                            onPressed: _addTask,
+                            onPressed: _addTask, // ← КНОПКА = добавить
                             backgroundColor: Color(0xFFFF99CC),
                             elevation: 0,
                             child: Icon(Icons.add, color: Colors.white),
@@ -175,7 +165,7 @@ class _ZenToDoState extends State<ZenToDo> {
                     ],
                   ),
                 ),
-                // 📋 СПИСОК ЗАДАЧ
+                // 📋 ЗАДАЧИ
                 Expanded(
                   child: _tasks.isEmpty
                       ? Center(
@@ -219,6 +209,7 @@ class _ZenToDoState extends State<ZenToDo> {
                                 ),
                                 child: Row(
                                   children: [
+                                    // ✅ Чекбокс
                                     GestureDetector(
                                       onTap: () => _toggleTask(index),
                                       child: Container(
@@ -237,32 +228,32 @@ class _ZenToDoState extends State<ZenToDo> {
                                           ),
                                         ),
                                         child: task['done']
-                                            ? Icon(Icons.check, color: Color(0xFF10B981), size: 20)
+                                            ? Icon(Icons.check, 
+                                                color: Color(0xFF10B981), size: 20)
                                             : Icon(Icons.radio_button_unchecked,
                                                 color: Colors.white54, size: 20),
                                       ),
                                     ),
                                     SizedBox(width: 16),
+                                    // 📝 ТЕКСТ ЗАДАЧИ (ИСПРАВЛЕНО!)
                                     Expanded(
-                                      child: task['done']
-                                          ? Text(
-                                              task['text'],
-                                              style: TextStyle(
-                                                color: Colors.white70,
-                                                decoration: TextDecoration.lineThrough,
-                                                fontSize: 16,
-                                              ),
-                                            )
-                                          : TextField(
-                                              controller: TextEditingController(text: task['text']),
-                                              onSubmitted: (newText) => _updateTask(index, newText),
-                                              maxLines: null,
-                                              style: TextStyle(color: Colors.white, fontSize: 16),
-                                              decoration: InputDecoration(
-                                                border: InputBorder.none,
-                                                hintStyle: TextStyle(color: Colors.white54),
-                                              ),
-                                            ),
+                                      child: GestureDetector(
+                                        onTap: task['done'] 
+                                            ? null 
+                                            : () => _showEditDialog(index),
+                                        child: Text(
+                                          task['text'],
+                                          style: TextStyle(
+                                            color: task['done']
+                                                ? Colors.white70
+                                                : Colors.white,
+                                            decoration: task['done']
+                                                ? TextDecoration.lineThrough
+                                                : null,
+                                            fontSize: 16,
+                                          ),
+                                        ),
+                                      ),
                                     ),
                                   ],
                                 ),
@@ -271,7 +262,7 @@ class _ZenToDoState extends State<ZenToDo> {
                           },
                         ),
                 ),
-                // 🎨 ПЕРЕКЛЮЧАТЕЛИ
+                // 🎨 ТЕМЫ + ЯЗЫКИ
                 Container(
                   width: double.infinity,
                   padding: EdgeInsets.all(20),
@@ -305,6 +296,49 @@ class _ZenToDoState extends State<ZenToDo> {
     );
   }
 
+  // 🖊️ ДИАЛОГ РЕДАКТИРОВАНИЯ
+  void _showEditDialog(int index) {
+    final controller = TextEditingController(text: _tasks[index]['text']);
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.grey[900],
+        title: Text('Изменить задачу', style: TextStyle(color: Colors.white)),
+        content: TextField(
+          controller: controller,
+          style: TextStyle(color: Colors.white),
+          decoration: InputDecoration(
+            hintText: 'Новый текст',
+            hintStyle: TextStyle(color: Colors.white54),
+            border: OutlineInputBorder(
+              borderSide: BorderSide(color: Colors.white38),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Отмена', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final newText = controller.text.trim();
+              if (newText.isNotEmpty) {
+                setState(() {
+                  _tasks[index]['text'] = newText;
+                });
+                _saveData();
+              }
+              Navigator.pop(context);
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Color(0xFFFF99CC)),
+            child: Text('Сохранить', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildThemeButton(String theme, String icon) {
     final isActive = _currentTheme == theme;
     return GestureDetector(
@@ -318,19 +352,17 @@ class _ZenToDoState extends State<ZenToDo> {
           gradient: isActive
               ? LinearGradient(colors: [Color(0xFFFF99CC), Color(0xFFE066B3)])
               : null,
-          color: isActive ? null : Colors.transparent,
           shape: BoxShape.circle,
           border: Border.all(color: isActive ? Colors.white : Colors.white24, width: 2),
           boxShadow: isActive
               ? [BoxShadow(color: Color(0xFFFF99CC).withOpacity(0.4), blurRadius: 16)]
               : null,
         ),
-        child: Text(icon,
-            style: TextStyle(
-              fontSize: 20,
-              color: isActive ? Colors.white : Colors.white54,
-              fontWeight: FontWeight.w600,
-            )),
+        child: Text(icon, style: TextStyle(
+          fontSize: 20,
+          color: isActive ? Colors.white : Colors.white54,
+          fontWeight: FontWeight.w600,
+        )),
       ),
     );
   }
@@ -348,16 +380,14 @@ class _ZenToDoState extends State<ZenToDo> {
           gradient: isActive
               ? LinearGradient(colors: [Color(0xFFFF99CC), Color(0xFFE066B3)])
               : null,
-          color: isActive ? null : Colors.transparent,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(color: isActive ? Colors.white : Colors.white24, width: 2),
         ),
-        child: Text(lang.toUpperCase(),
-            style: TextStyle(
-              color: isActive ? Colors.white : Colors.white54,
-              fontWeight: FontWeight.w700,
-              fontSize: 14,
-            )),
+        child: Text(lang.toUpperCase(), style: TextStyle(
+          color: isActive ? Colors.white : Colors.white54,
+          fontWeight: FontWeight.w700,
+          fontSize: 14,
+        )),
       ),
     );
   }
