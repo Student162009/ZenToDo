@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ZenTodo 禅</title>
+    <!-- Google Fonts Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="theme-japanese">
+    
+    <!-- Header -->
+    <header>
+        <h1 id="app-title">ZenTodo 禅</h1>
+        <form id="new-task-form">
+            <input 
+                type="text" 
+                id="new-task-input" 
+                data-ru-placeholder="Что в гармонии сегодня?" 
+                data-en-placeholder="What brings harmony today?"
+                autocomplete="off"
+                maxlength="200"
+            />
+            <button type="submit" id="new-task-submit">Добавить</button>
+        </form>
+    </header>
+
+    <!-- Main с сортировкой -->
+    <main>
+        <section class="task-list">
+            <h2 id="tasks-title">Задачи Дзен</h2>
+            
+            <!-- 🔄 Кнопки сортировки добавляются JS -->
+            <div id="tasks"></div>
+        </section>
+    </main>
+
+    <!-- Футер с кнопками тем -->
+    <footer class="controls">
+        <div class="theme-toggle">
+            <button data-theme="dark" class="theme-btn">🌙</button>
+            <button data-theme="light" class="theme-btn">☀️</button>
+            <button data-theme="japanese" class="theme-btn active">🌸</button>
+        </div>
+        <div class="lang-toggle">
+            <button data-lang="ru" class="lang-btn active">РУ</button>
+            <button data-lang="en" class="lang-btn">EN</button>
+        </div>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+</html>
