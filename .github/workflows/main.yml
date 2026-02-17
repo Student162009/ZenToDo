@@ -1,22 +1,31 @@
-name: Build ZenToDo APK + EXE
+name: Build ZenToDo APK
 on:
   push:
     branches: [ main ]
-  workflow_dispatch:
+  workflow_dispatch:  # ← Ручной запуск
 
 jobs:
-
-  # EXE для Windows
-  windows:
-    runs-on: windows-latest
+  build:
+    runs-on: ubuntu-latest
+    
     steps:
-    - uses: actions/checkout@v4
-    - uses: subosito/flutter-action@v2
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Setup Flutter
+      uses: subosito/flutter-action@v2
       with:
         flutter-version: '3.x'
-    - run: flutter pub get
-    - run: flutter build windows --release
-    - uses: actions/upload-artifact@v4
+        channel: 'stable'
+    
+    - name: Get dependencies
+      run: flutter pub get
+    
+    - name: Build APK
+      run: flutter build apk --release
+    
+    - name: Upload APK
+      uses: actions/upload-artifact@v4
       with:
-        name: ZenToDo-EXE
-        path: build/app/outputs/flutter-exe/app-release.exe
+        name: ZenToDo-release.apk
+        path: build/app/outputs/flutter-apk/app-release.apk
