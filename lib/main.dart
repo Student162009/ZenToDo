@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:audioplayers/audioplayers.dart';
 
 void main() {
   runApp(const ZenTodoApp());
@@ -17,13 +18,17 @@ class _ZenTodoAppState extends State<ZenTodoApp> with TickerProviderStateMixin {
   String _currentTheme = 'japanese';
   String _currentLang = 'ru';
   List<Map<String, dynamic>> _tasks = [];
-  String _sortMode = 'none'; // 'none', 'alpha', 'alpha-rev', 'length', 'length-rev', 'date-new', 'date-old', 'status'
+  String _sortMode = 'none';
 
   final TextEditingController _newTaskController = TextEditingController();
 
   // Анимация фона (пульсация)
   late AnimationController _gradientController;
   late Animation<double> _gradientAnimation;
+
+  // Музыка
+  final AudioPlayer _audioPlayer = AudioPlayer();
+  bool _isMusicPlaying = false;
 
   // Локализация
   late Map<String, String> _texts;
@@ -87,8 +92,9 @@ class _ZenTodoAppState extends State<ZenTodoApp> with TickerProviderStateMixin {
     super.initState();
     _loadData();
     _updateTexts();
+    _loadMusicState();
+    _initAudioPlayer();
 
-    // Инициализация анимации градиента
     _gradientController = AnimationController(
       duration: const Duration(seconds: 20),
       vsync: this,
@@ -136,7 +142,7 @@ class _ZenTodoAppState extends State<ZenTodoApp> with TickerProviderStateMixin {
         for (var task in _tasks) {
           task['createdAt'] ??= DateTime.now().toIso8601String();
           task['status'] ??= (task['done'] == true ? 'done' : 'pending');
-          task.remove('done'); // удаляем устаревшее поле
+          task.remove('done');
         }
       });
     } catch (e) {
@@ -167,6 +173,45 @@ class _ZenTodoAppState extends State<ZenTodoApp> with TickerProviderStateMixin {
       }
     }
   }
+
+  // --- Музыка ---
+  Future<void> _loadMusicState() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _isMusicPlaying = prefs.getBool('music') ?? false;
+    });
+    if (_isMusicPlaying) {
+      _playMusic();
+    }
+  }
+
+  void _initAudioPlayer() {
+    _audioPlayer.setReleaseMode(ReleaseMode.loop);
+    _audioPlayer.setVolume(0.3); // фоновая громкость
+  }
+
+  Future<void> _playMusic() async {
+    try {
+      // Замените 'audio/lofi.mp3' на путь к вашему файлу
+      await _audioPlayer.play(AssetSource('audio/lofi.mp3'));
+    } catch (e) {
+      debugPrint('Error playing music: $e');
+    }
+  }
+
+  void _toggleMusic() async {
+    if (_isMusicPlaying) {
+      await _audioPlayer.stop();
+    } else {
+      await _playMusic();
+    }
+    setState(() {
+      _isMusicPlaying = !_isMusicPlaying;
+    });
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('music', _isMusicPlaying);
+  }
+  // -----------------
 
   void _addTask() async {
     final text = _newTaskController.text.trim();
@@ -262,9 +307,6 @@ class _ZenTodoAppState extends State<ZenTodoApp> with TickerProviderStateMixin {
 
   String _formatDate(String isoString) {
     final date = DateTime.parse(isoString).toLocal();
-    final now = DateTime.now();
-    final diff = now.difference(date);
-
     String dayMonth;
     if (_currentLang == 'ru') {
       const months = [
@@ -279,7 +321,6 @@ class _ZenTodoAppState extends State<ZenTodoApp> with TickerProviderStateMixin {
       ];
       dayMonth = '${months[date.month - 1]} ${date.day}';
     }
-
     final hour = date.hour.toString().padLeft(2, '0');
     final minute = date.minute.toString().padLeft(2, '0');
     return '$dayMonth, $hour:$minute';
@@ -290,8 +331,6 @@ class _ZenTodoAppState extends State<ZenTodoApp> with TickerProviderStateMixin {
       _currentTheme == 'light' ? Colors.black87 : Colors.white;
   Color get secondaryTextColor =>
       _currentTheme == 'light' ? Colors.black54 : Colors.white70;
-  Color get backgroundColor =>
-      _currentTheme == 'light' ? Colors.white : Colors.grey[900]!;
   Color get surfaceColor => textColor.withOpacity(0.08);
 
   // Градиент фона с анимацией
@@ -326,6 +365,7 @@ class _ZenTodoAppState extends State<ZenTodoApp> with TickerProviderStateMixin {
   void dispose() {
     _gradientController.dispose();
     _newTaskController.dispose();
+    _audioPlayer.dispose();
     super.dispose();
   }
 
@@ -336,7 +376,7 @@ class _ZenTodoAppState extends State<ZenTodoApp> with TickerProviderStateMixin {
       title: 'ZenTodo 禅',
       theme: ThemeData(
         useMaterial3: true,
-        fontFamily: 'Inter', // Подключаем шрифт Inter
+        fontFamily: 'Inter',
         brightness: _currentTheme == 'light' ? Brightness.light : Brightness.dark,
       ),
       home: Scaffold(
@@ -492,7 +532,7 @@ class _ZenTodoAppState extends State<ZenTodoApp> with TickerProviderStateMixin {
                         ),
                 ),
 
-                // Футер
+                // Футер (темы, язык, музыка)
                 _buildFooter(),
               ],
             ),
@@ -594,6 +634,7 @@ class _ZenTodoAppState extends State<ZenTodoApp> with TickerProviderStateMixin {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
+            // Темы
             Row(
               children: [
                 _buildThemeButton('japanese', '🌸'),
@@ -603,6 +644,7 @@ class _ZenTodoAppState extends State<ZenTodoApp> with TickerProviderStateMixin {
                 _buildThemeButton('light', '☀️'),
               ],
             ),
+            // Язык
             Row(
               children: [
                 _buildLangButton('ru'),
@@ -610,6 +652,8 @@ class _ZenTodoAppState extends State<ZenTodoApp> with TickerProviderStateMixin {
                 _buildLangButton('en'),
               ],
             ),
+            // Музыка
+            _buildMusicButton(),
           ],
         ),
       ),
@@ -684,10 +728,34 @@ class _ZenTodoAppState extends State<ZenTodoApp> with TickerProviderStateMixin {
     );
   }
 
+  Widget _buildMusicButton() {
+    return GestureDetector(
+      onTap: _toggleMusic,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: _isMusicPlaying ? accentColor : surfaceColor,
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: _isMusicPlaying ? Colors.transparent : textColor.withOpacity(0.3),
+            width: 2,
+          ),
+        ),
+        child: Icon(
+          _isMusicPlaying ? Icons.music_note : Icons.music_off,
+          color: _isMusicPlaying ? Colors.white : textColor.withOpacity(0.6),
+          size: 20,
+        ),
+      ),
+    );
+  }
+
   List<Color> _getTitleGradientColors() {
     switch (_currentTheme) {
       case 'japanese':
-        return const [Color(0xFFF4C7D6), Color(0xFFFF99CC), Color(0xFF1E3A8A)];
+        // Более контрастный градиент для японской темы
+        return const [Color(0xFFFFF0F5), Color(0xFFFFB6C1), Colors.white];
       case 'dark':
         return const [Color(0xFFEC4899), Color(0xFF8B5CF6)];
       case 'light':
@@ -709,7 +777,7 @@ class _ZenTodoAppState extends State<ZenTodoApp> with TickerProviderStateMixin {
   }
 }
 
-// Анимированная карточка задачи
+// Анимированная карточка задачи (без изменений)
 class AnimatedTaskCard extends StatefulWidget {
   final Map<String, dynamic> task;
   final int index;

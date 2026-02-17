@@ -1,47 +1,55 @@
-name: ZenToDo
-description: ZenToDo — кроссплатформенный ToDo
+name: zentodo
+description: A Zen Todo app with lofi music and beautiful themes.
+publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 
-publish_to: 'none'
 version: 1.0.0+1
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
-  flutter: ">=3.10.0"
 
 dependencies:
   flutter:
     sdk: flutter
-  shared_preferences: ^2.2.3
+
+  # Для сохранения настроек (тема, язык, сортировка, музыка)
+  shared_preferences: ^2.2.2
+
+  # Для фоновой музыки
+  audioplayers: ^5.2.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^3.0.0
+
+  # Для генерации иконок приложения
   flutter_launcher_icons: ^0.13.1
 
 flutter_launcher_icons:
   android: true
   ios: true
   image_path: "assets/images/icon.jpg"
-  adaptive_icon_background: "#FFFFFF"   
-  adaptive_icon_foreground: "assets/images/icon.jpg"  
-
-  fonts:
-    - family: Inter
-      fonts:
-        - asset: fonts/Inter-Light.ttf
-          weight: 300
-        - asset: fonts/Inter-Regular.ttf
-          weight: 400
-        - asset: fonts/Inter-Medium.ttf
-          weight: 500
-        - asset: fonts/Inter-SemiBold.ttf
-          weight: 600
-        - asset: fonts/Inter-Bold.ttf
-          weight: 700
+  adaptive_icon_background: "#FFFFFF"   # цвет фона для адаптивной иконки Android
+  adaptive_icon_foreground: "assets/images/icon.jpg"  # если иконка уже квадратная
 
 flutter:
   uses-material-design: true
-  assets:
-    - assets/images/  # ← 2 ПРОБЕЛА СЛЕВА!
 
+  # Подключаем шрифт Inter (скачайте и поместите файлы в assets/fonts/)
+  fonts:
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter-Light.ttf
+          weight: 300
+        - asset: assets/fonts/Inter-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Inter-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Inter-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Inter-Bold.ttf
+          weight: 700
+
+  # Ассеты: иконка и музыка
+  assets:
+    - assets/images/icon.jpg
+    - assets/audio/lofi.mp3
