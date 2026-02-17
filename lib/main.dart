@@ -15,7 +15,6 @@ class _ZenToDoState extends State<ZenToDo> {
   String _currentLang = 'ru';
   List<Map<String, dynamic>> _tasks = [];
   final TextEditingController _newTaskController = TextEditingController();
-  bool _isEditing = false; // ← НОВОЕ: флаг редактирования
 
   @override
   void initState() {
@@ -28,15 +27,15 @@ class _ZenToDoState extends State<ZenToDo> {
     setState(() {
       _currentTheme = prefs.getString('theme') ?? 'japanese';
       _currentLang = prefs.getString('lang') ?? 'ru';
-      _tasks = (prefs.getStringList('tasks') ?? [])
-          .map((taskJson) {
-            final parts = taskJson.split('|');
-            return {
-              'id': parts[0],
-              'text': parts[1],
-              'done': parts[2] == 'true',
-            };
-          }).toList();
+      final taskList = prefs.getStringList('tasks') ?? [];
+      _tasks = taskList.map((taskJson) {
+        final parts = taskJson.split('|');
+        return {
+          'id': parts[0],
+          'text': parts.length > 1 ? parts[1] : '',
+          'done': parts.length > 2 ? parts[2] == 'true' : false,
+        };
+      }).toList();
     });
   }
 
@@ -45,15 +44,18 @@ class _ZenToDoState extends State<ZenToDo> {
     await prefs.setString('theme', _currentTheme);
     await prefs.setString('lang', _currentLang);
     await prefs.setStringList(
-        'tasks', _tasks.map((task) => '${task['id']}|${task['text']}|${task['done']}').toList());
+      'tasks',
+      _tasks.map((task) => '${task['id']}|${task['text']}|${task['done']}').toList(),
+    );
   }
 
   void _addTask() {
-    if (_newTaskController.text.trim().isNotEmpty) {
+    final text = _newTaskController.text.trim();
+    if (text.isNotEmpty) {
       setState(() {
         _tasks.insert(0, {
           'id': DateTime.now().millisecondsSinceEpoch.toString(),
-          'text': _newTaskController.text.trim(),
+          'text': text,
           'done': false,
         });
       });
@@ -77,233 +79,21 @@ class _ZenToDoState extends State<ZenToDo> {
       _tasks.removeAt(index);
     });
     _saveData();
-  }
-
-  String _toTitleCase(String text) {
-    return text.split(' ').map((word) {
-      if (word.isEmpty) return word;
-      return word[0].toUpperCase() + word.substring(1).toLowerCase();
-    }).join(' ');
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      title: 'ZenToDo',
-      theme: ThemeData(useMaterial3: true),
-      home: Scaffold(
-        body: Container(
-          decoration: BoxDecoration(
-            gradient: _getThemeGradient(_currentTheme),
-          ),
-          child: SafeArea(
-            child: Column(
-              children: [
-                // 🖼️ HEADER
-                Padding(
-                  padding: EdgeInsets.all(24),
-                  child: Column(
-                    children: [
-                      Row(
-                        children: [
-                          CircleAvatar(
-                            radius: 35,
-                            backgroundImage: AssetImage('assets/images/avatar.jpg'),
-                            backgroundColor: Colors.pink.withOpacity(0.3),
-                            child: Icon(Icons.person, size: 35, color: Colors.white54),
-                          ),
-                          SizedBox(width: 16),
-                          Expanded(
-                            child: Text(
-                              _toTitleCase(_currentLang == 'ru' ? 'ZenToDo 禅' : 'ZenToDo Zen'),
-                              style: TextStyle(
-                                fontSize: 36,
-                                fontWeight: FontWeight.w400,
-                                letterSpacing: 2,
-                                foreground: Paint()
-                                  ..shader = LinearGradient(
-                                    colors: _getThemeColors(_currentTheme),
-                                  ).createShader(Rect.fromLTWH(0, 0, 200, 100)),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      SizedBox(height: 24),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: TextField(
-                              controller: _newTaskController,
-                              textCapitalization: TextCapitalization.sentences,
-                              decoration: InputDecoration(
-                                hintText: _currentLang == 'ru'
-                                    ? 'Что в гармонии сегодня?'
-                                    : 'What brings harmony today?',
-                                hintStyle: TextStyle(color: Colors.white70),
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(20),
-                                ),
-                                filled: true,
-                                fillColor: Colors.white.withOpacity(0.15),
-                                contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                              ),
-                              style: TextStyle(color: Colors.white, fontSize: 18),
-                              onSubmitted: (_) => _addTask(), // ← ENTER = добавить
-                            ),
-                          ),
-                          SizedBox(width: 12),
-                          FloatingActionButton(
-                            onPressed: _addTask, // ← КНОПКА = добавить
-                            backgroundColor: Color(0xFFFF99CC),
-                            elevation: 0,
-                            child: Icon(Icons.add, color: Colors.white),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                // 📋 ЗАДАЧИ
-                Expanded(
-                  child: _tasks.isEmpty
-                      ? Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.task_alt, size: 64, color: Colors.white54),
-                              SizedBox(height: 16),
-                              Text(
-                                _currentLang == 'ru' ? 'Задачи пусты' : 'No tasks yet',
-                                style: TextStyle(color: Colors.white70, fontSize: 18),
-                              ),
-                            ],
-                          ),
-                        )
-                      : ListView.builder(
-                          padding: EdgeInsets.symmetric(horizontal: 24),
-                          itemCount: _tasks.length,
-                          itemBuilder: (context, index) {
-                            final task = _tasks[index];
-                            return Dismissible(
-                              key: Key(task['id']),
-                              onDismissed: (_) => _deleteTask(index),
-                              background: Container(
-                                margin: EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-                                decoration: BoxDecoration(
-                                  color: Colors.red,
-                                  borderRadius: BorderRadius.circular(20),
-                                ),
-                                alignment: Alignment.centerRight,
-                                padding: EdgeInsets.only(right: 20),
-                                child: Icon(Icons.delete, color: Colors.white, size: 28),
-                              ),
-                              child: Container(
-                                margin: EdgeInsets.symmetric(vertical: 8),
-                                padding: EdgeInsets.all(20),
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(20),
-                                  border: Border.all(color: Colors.white24),
-                                ),
-                                child: Row(
-                                  children: [
-                                    // ✅ Чекбокс
-                                    GestureDetector(
-                                      onTap: () => _toggleTask(index),
-                                      child: Container(
-                                        width: 32,
-                                        height: 32,
-                                        decoration: BoxDecoration(
-                                          color: task['done']
-                                              ? Color(0xFF10B981).withOpacity(0.3)
-                                              : Colors.transparent,
-                                          borderRadius: BorderRadius.circular(16),
-                                          border: Border.all(
-                                            color: task['done']
-                                                ? Color(0xFF10B981)
-                                                : Colors.white38,
-                                            width: 2,
-                                          ),
-                                        ),
-                                        child: task['done']
-                                            ? Icon(Icons.check, 
-                                                color: Color(0xFF10B981), size: 20)
-                                            : Icon(Icons.radio_button_unchecked,
-                                                color: Colors.white54, size: 20),
-                                      ),
-                                    ),
-                                    SizedBox(width: 16),
-                                    // 📝 ТЕКСТ ЗАДАЧИ (ИСПРАВЛЕНО!)
-                                    Expanded(
-                                      child: GestureDetector(
-                                        onTap: task['done'] 
-                                            ? null 
-                                            : () => _showEditDialog(index),
-                                        child: Text(
-                                          task['text'],
-                                          style: TextStyle(
-                                            color: task['done']
-                                                ? Colors.white70
-                                                : Colors.white,
-                                            decoration: task['done']
-                                                ? TextDecoration.lineThrough
-                                                : null,
-                                            fontSize: 16,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                ),
-                // 🎨 ТЕМЫ + ЯЗЫКИ
-                Container(
-                  width: double.infinity,
-                  padding: EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.3),
-                    borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      Row(children: [
-                        _buildThemeButton('dark', '🌙'),
-                        SizedBox(width: 8),
-                        _buildThemeButton('light', '☀️'),
-                        SizedBox(width: 8),
-                        _buildThemeButton('japanese', '🌸'),
-                      ]),
-                      Row(children: [
-                        _buildLangButton('ru'),
-                        SizedBox(width: 8),
-                        _buildLangButton('en'),
-                      ]),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Задача удалена! 🗑️')),
     );
   }
 
-  // 🖊️ ДИАЛОГ РЕДАКТИРОВАНИЯ
-  void _showEditDialog(int index) {
+  void _editTask(int index) {
     final controller = TextEditingController(text: _tasks[index]['text']);
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: Colors.grey[900],
-        title: Text('Изменить задачу', style: TextStyle(color: Colors.white)),
+        title: Text(
+          'Редактировать',
+          style: TextStyle(color: Colors.white),
+        ),
         content: TextField(
           controller: controller,
           style: TextStyle(color: Colors.white),
@@ -339,6 +129,271 @@ class _ZenToDoState extends State<ZenToDo> {
     );
   }
 
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      title: 'ZenToDo',
+      theme: ThemeData(useMaterial3: true),
+      home: Scaffold(
+        body: Container(
+          decoration: BoxDecoration(
+            gradient: _getThemeGradient(_currentTheme),
+          ),
+          child: SafeArea(
+            child: Column(
+              children: [
+                // HEADER
+                Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          // АВАТАРКА
+                          Container(
+                            width: 70,
+                            height: 70,
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [Color(0xFFFF99CC), Color(0xFFE066B3)],
+                              ),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              Icons.person,
+                              size: 35,
+                              color: Colors.white,
+                            ),
+                          ),
+                          SizedBox(width: 16),
+                          Expanded(
+                            child: Text(
+                              _currentLang == 'ru' ? 'ZenToDo 禅' : 'ZenToDo Zen',
+                              style: TextStyle(
+                                fontSize: 32,
+                                fontWeight: FontWeight.w400,
+                                letterSpacing: 1.5,
+                                foreground: Paint()
+                                  ..shader = LinearGradient(
+                                    colors: _getThemeColors(_currentTheme),
+                                  ).createShader(Rect.fromLTWH(0, 0, 200, 80)),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      SizedBox(height: 32),
+                      // INPUT + КНОПКА
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: _newTaskController,
+                              style: TextStyle(color: Colors.white, fontSize: 18),
+                              decoration: InputDecoration(
+                                hintText: _currentLang == 'ru'
+                                    ? 'Что в гармонии сегодня?'
+                                    : 'What brings harmony today?',
+                                hintStyle: TextStyle(color: Colors.white70),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(20),
+                                  borderSide: BorderSide(color: Colors.white24),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(20),
+                                  borderSide: BorderSide(color: Colors.white24),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(20),
+                                  borderSide: BorderSide(color: Colors.white),
+                                ),
+                                filled: true,
+                                fillColor: Colors.white.withOpacity(0.15),
+                                contentPadding: EdgeInsets.symmetric(
+                                  horizontal: 20,
+                                  vertical: 16,
+                                ),
+                              ),
+                              onSubmitted: (_) => _addTask(),
+                              textCapitalization: TextCapitalization.sentences,
+                            ),
+                          ),
+                          SizedBox(width: 12),
+                          // КНОПКА + (ГАРАНТИРОВАННО РАБОТАЕТ!)
+                          FloatingActionButton(
+                            onPressed: _addTask,
+                            backgroundColor: Color(0xFFFF99CC),
+                            elevation: 8,
+                            highlightElevation: 12,
+                            child: Icon(Icons.add, color: Colors.white, size: 24),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                // СПИСОК ЗАДАЧ
+                Expanded(
+                  child: _tasks.isEmpty
+                      ? Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.task_alt, size: 80, color: Colors.white54),
+                              SizedBox(height: 24),
+                              Text(
+                                _currentLang == 'ru' ? 'Задачи пусты' : 'No tasks yet',
+                                style: TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 20,
+                                ),
+                              ),
+                              SizedBox(height: 8),
+                              Text(
+                                _currentLang == 'ru'
+                                    ? 'Нажми + чтобы добавить'
+                                    : 'Press + to add tasks',
+                                style: TextStyle(
+                                  color: Colors.white54,
+                                  fontSize: 16,
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      : ListView.builder(
+                          padding: EdgeInsets.symmetric(horizontal: 24),
+                          itemCount: _tasks.length,
+                          itemBuilder: (context, index) {
+                            final task = _tasks[index];
+                            return Dismissible(
+                              key: Key(task['id']),
+                              direction: DismissDirection.endToStart,
+                              onDismissed: (_) => _deleteTask(index),
+                              background: Container(
+                                margin: EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                                decoration: BoxDecoration(
+                                  color: Colors.red,
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                alignment: Alignment.centerRight,
+                                padding: EdgeInsets.only(right: 20),
+                                child: Icon(
+                                  Icons.delete,
+                                  color: Colors.white,
+                                  size: 28,
+                                ),
+                              ),
+                              child: GestureDetector(
+                                onTap: () => _editTask(index),
+                                child: Container(
+                                  margin: EdgeInsets.symmetric(vertical: 8),
+                                  padding: EdgeInsets.all(20),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withOpacity(0.12),
+                                    borderRadius: BorderRadius.circular(20),
+                                    border: Border.all(color: Colors.white24),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      // ЧЕКБОКС
+                                      GestureDetector(
+                                        onTap: () => _toggleTask(index),
+                                        child: Container(
+                                          width: 36,
+                                          height: 36,
+                                          decoration: BoxDecoration(
+                                            color: task['done']
+                                                ? Color(0xFF10B981).withOpacity(0.4)
+                                                : Colors.transparent,
+                                            borderRadius: BorderRadius.circular(18),
+                                            border: Border.all(
+                                              color: task['done']
+                                                  ? Color(0xFF10B981)
+                                                  : Colors.white38,
+                                              width: 2,
+                                            ),
+                                          ),
+                                          child: task['done']
+                                              ? Icon(
+                                                  Icons.check,
+                                                  color: Color(0xFF10B981),
+                                                  size: 20,
+                                                )
+                                              : Icon(
+                                                  Icons.radio_button_unchecked,
+                                                  color: Colors.white54,
+                                                  size: 20,
+                                                ),
+                                        ),
+                                      ),
+                                      SizedBox(width: 16),
+                                      // ТЕКСТ
+                                      Expanded(
+                                        child: Text(
+                                          task['text'],
+                                          style: TextStyle(
+                                            color: task['done']
+                                                ? Colors.white70
+                                                : Colors.white,
+                                            decoration: task['done']
+                                                ? TextDecoration.lineThrough
+                                                : null,
+                                            fontSize: 16,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                ),
+                // КОНТРОЛЛЕРЫ
+                Container(
+                  width: double.infinity,
+                  padding: EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.4),
+                    borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
+                  ),
+                  child: SafeArea(
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        // ТЕМЫ
+                        Row(
+                          children: [
+                            _buildThemeButton('japanese', '🌸'),
+                            SizedBox(width: 8),
+                            _buildThemeButton('dark', '🌙'),
+                            SizedBox(width: 8),
+                            _buildThemeButton('light', '☀️'),
+                          ],
+                        ),
+                        // ЯЗЫКИ
+                        Row(
+                          children: [
+                            _buildLangButton('ru'),
+                            SizedBox(width: 8),
+                            _buildLangButton('en'),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildThemeButton(String theme, String icon) {
     final isActive = _currentTheme == theme;
     return GestureDetector(
@@ -353,16 +408,28 @@ class _ZenToDoState extends State<ZenToDo> {
               ? LinearGradient(colors: [Color(0xFFFF99CC), Color(0xFFE066B3)])
               : null,
           shape: BoxShape.circle,
-          border: Border.all(color: isActive ? Colors.white : Colors.white24, width: 2),
+          border: Border.all(
+            color: isActive ? Colors.white : Colors.white24,
+            width: 2,
+          ),
           boxShadow: isActive
-              ? [BoxShadow(color: Color(0xFFFF99CC).withOpacity(0.4), blurRadius: 16)]
+              ? [
+                  BoxShadow(
+                    color: Color(0xFFFF99CC).withOpacity(0.4),
+                    blurRadius: 16,
+                    spreadRadius: 0,
+                  )
+                ]
               : null,
         ),
-        child: Text(icon, style: TextStyle(
-          fontSize: 20,
-          color: isActive ? Colors.white : Colors.white54,
-          fontWeight: FontWeight.w600,
-        )),
+        child: Text(
+          icon,
+          style: TextStyle(
+            fontSize: 20,
+            color: isActive ? Colors.white : Colors.white60,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
       ),
     );
   }
@@ -381,13 +448,19 @@ class _ZenToDoState extends State<ZenToDo> {
               ? LinearGradient(colors: [Color(0xFFFF99CC), Color(0xFFE066B3)])
               : null,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: isActive ? Colors.white : Colors.white24, width: 2),
+          border: Border.all(
+            color: isActive ? Colors.white : Colors.white24,
+            width: 2,
+          ),
         ),
-        child: Text(lang.toUpperCase(), style: TextStyle(
-          color: isActive ? Colors.white : Colors.white54,
-          fontWeight: FontWeight.w700,
-          fontSize: 14,
-        )),
+        child: Text(
+          lang.toUpperCase(),
+          style: TextStyle(
+            color: isActive ? Colors.white : Colors.white60,
+            fontWeight: FontWeight.w700,
+            fontSize: 14,
+          ),
+        ),
       ),
     );
   }
@@ -401,10 +474,14 @@ class _ZenToDoState extends State<ZenToDo> {
           colors: [Color(0xFF0D1117), Color(0xFF1E3A8A), Color(0xFF000000)],
         );
       case 'dark':
-        return LinearGradient(colors: [Color(0xFF1A1A2E), Color(0xFF16213E), Color(0xFF0F0F23)]);
+        return LinearGradient(
+          colors: [Color(0xFF1A1A2E), Color(0xFF16213E), Color(0xFF0F0F23)],
+        );
       case 'light':
       default:
-        return LinearGradient(colors: [Color(0xFFF8FAFC), Color(0xFFE2E8F0), Color(0xFFF1F5F9)]);
+        return LinearGradient(
+          colors: [Color(0xFFF8FAFC), Color(0xFFE2E8F0), Color(0xFFF1F5F9)],
+        );
     }
   }
 
