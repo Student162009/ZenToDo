@@ -3,74 +3,160 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
-  runApp(const ZenToDo());
+  runApp(const ZenTodoApp());
 }
 
-class ZenToDo extends StatefulWidget {
-  const ZenToDo({super.key});
+class ZenTodoApp extends StatefulWidget {
+  const ZenTodoApp({super.key});
 
   @override
-  State<ZenToDo> createState() => _ZenToDoState();
+  State<ZenTodoApp> createState() => _ZenTodoAppState();
 }
 
-class _ZenToDoState extends State<ZenToDo> {
+class _ZenTodoAppState extends State<ZenTodoApp> with TickerProviderStateMixin {
   String _currentTheme = 'japanese';
   String _currentLang = 'ru';
   List<Map<String, dynamic>> _tasks = [];
+  String _sortMode = 'none'; // 'none', 'alpha', 'alpha-rev', 'length', 'length-rev', 'date-new', 'date-old', 'status'
+
   final TextEditingController _newTaskController = TextEditingController();
 
-  static const Color _accentColor = Color(0xFFFF99CC);
+  // Анимация фона (пульсация)
+  late AnimationController _gradientController;
+  late Animation<double> _gradientAnimation;
+
+  // Локализация
+  late Map<String, String> _texts;
+  final Map<String, Map<String, String>> _allTexts = {
+    'ru': {
+      'title': 'ZenTodo 禅',
+      'tasksTitle': 'Задачи Дзен',
+      'placeholder': 'Что в гармонии сегодня?',
+      'submit': 'Добавить',
+      'sort': 'Сортировка:',
+      'sortNone': 'Без сортировки',
+      'sortAlpha': 'A→Я',
+      'sortAlphaRev': 'Я→A',
+      'sortLength': 'По длине',
+      'sortLengthRev': 'По длине (обр.)',
+      'sortDateNew': 'Сначала новые',
+      'sortDateOld': 'Сначала старые',
+      'sortStatus': 'По статусу',
+      'edit': 'Ред.',
+      'delete': '✕',
+      'togglePending': '⏳ Ожидание',
+      'toggleDone': '✅ Выполнено',
+      'statusPending': '⏳ Ожидание',
+      'statusDone': '✅ Выполнено',
+      'taskAdded': 'Задача добавлена! ✅',
+      'taskDeleted': 'Задача удалена! 🗑️',
+      'enterTask': 'Введите текст задачи',
+      'cancel': 'Отмена',
+      'save': 'Сохранить',
+    },
+    'en': {
+      'title': 'ZenTodo 禅',
+      'tasksTitle': 'Zen Tasks',
+      'placeholder': 'What brings harmony today?',
+      'submit': 'Add',
+      'sort': 'Sort:',
+      'sortNone': 'None',
+      'sortAlpha': 'A→Z',
+      'sortAlphaRev': 'Z→A',
+      'sortLength': 'Length',
+      'sortLengthRev': 'Length (rev)',
+      'sortDateNew': 'Newest first',
+      'sortDateOld': 'Oldest first',
+      'sortStatus': 'By status',
+      'edit': 'Edit',
+      'delete': '✕',
+      'togglePending': '⏳ Pending',
+      'toggleDone': '✅ Done',
+      'statusPending': '⏳ Pending',
+      'statusDone': '✅ Done',
+      'taskAdded': 'Task added! ✅',
+      'taskDeleted': 'Task deleted! 🗑️',
+      'enterTask': 'Enter task text',
+      'cancel': 'Cancel',
+      'save': 'Save',
+    },
+  };
 
   @override
   void initState() {
     super.initState();
     _loadData();
+    _updateTexts();
+
+    // Инициализация анимации градиента
+    _gradientController = AnimationController(
+      duration: const Duration(seconds: 20),
+      vsync: this,
+    )..repeat(reverse: true);
+    _gradientAnimation = Tween<double>(begin: 0.0, end: 0.2).animate(
+      CurvedAnimation(parent: _gradientController, curve: Curves.easeInOut),
+    );
   }
 
+  void _updateTexts() {
+    _texts = _allTexts[_currentLang]!;
+  }
+
+  // Загрузка данных из SharedPreferences
   Future<void> _loadData() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       setState(() {
         _currentTheme = prefs.getString('theme') ?? 'japanese';
         _currentLang = prefs.getString('lang') ?? 'ru';
+        _sortMode = prefs.getString('sortMode') ?? 'none';
+        _updateTexts();
 
         final taskList = prefs.getStringList('tasks') ?? [];
         _tasks = taskList.map((taskJson) {
           try {
             return Map<String, dynamic>.from(jsonDecode(taskJson) as Map);
           } catch (e) {
-            // Попытка прочитать старый формат (с разделителем |) для совместимости
+            // Совместимость со старым форматом (id|text|done)
             final parts = taskJson.split('|');
             if (parts.length >= 2) {
               return {
                 'id': parts[0],
                 'text': parts[1],
                 'done': parts.length > 2 ? parts[2] == 'true' : false,
+                'createdAt': DateTime.now().toIso8601String(),
+                'status': parts.length > 2 && parts[2] == 'true' ? 'done' : 'pending',
               };
             }
-            return {'id': '', 'text': '', 'done': false};
+            return {'id': '', 'text': '', 'done': false, 'status': 'pending'};
           }
         }).where((task) => task['id'].isNotEmpty).toList();
+
+        // Приводим все задачи к единому формату
+        for (var task in _tasks) {
+          task['createdAt'] ??= DateTime.now().toIso8601String();
+          task['status'] ??= (task['done'] == true ? 'done' : 'pending');
+          task.remove('done'); // удаляем устаревшее поле
+        }
       });
-      debugPrint('Data loaded: ${_tasks.length} tasks');
     } catch (e) {
       debugPrint('Error loading data: $e');
     }
   }
 
+  // Сохранение данных
   Future<void> _saveData() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('theme', _currentTheme);
       await prefs.setString('lang', _currentLang);
+      await prefs.setString('sortMode', _sortMode);
       await prefs.setStringList(
         'tasks',
         _tasks.map((task) => jsonEncode(task)).toList(),
       );
-      debugPrint('Data saved successfully');
     } catch (e) {
       debugPrint('Error saving data: $e');
-      // Показываем ошибку пользователю (опционально)
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -84,59 +170,38 @@ class _ZenToDoState extends State<ZenToDo> {
 
   void _addTask() async {
     final text = _newTaskController.text.trim();
-    debugPrint('Add task pressed. Text: "$text"');
-
     if (text.isEmpty) {
-      debugPrint('Text is empty – not adding');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Введите текст задачи'),
-            backgroundColor: Colors.orange,
-          ),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_texts['enterTask']!),
+          backgroundColor: Colors.orange,
+        ),
+      );
       return;
     }
 
-    try {
-      setState(() {
-        _tasks.insert(0, {
-          'id': DateTime.now().millisecondsSinceEpoch.toString(),
-          'text': text,
-          'done': false,
-        });
+    setState(() {
+      _tasks.insert(0, {
+        'id': DateTime.now().millisecondsSinceEpoch.toString(),
+        'text': text,
+        'createdAt': DateTime.now().toIso8601String(),
+        'status': 'pending',
       });
-      debugPrint('Task added to list. New length: ${_tasks.length}');
-
-      _newTaskController.clear();
-
-      await _saveData(); // ждём сохранения
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(_currentLang == 'ru' ? 'Задача добавлена! ✅' : 'Task added! ✅'),
-          ),
-        );
-      }
-    } catch (e, stack) {
-      debugPrint('Exception in _addTask: $e\n$stack');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Ошибка: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+    });
+    _newTaskController.clear();
+    await _saveData();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(_texts['taskAdded']!)),
+      );
     }
   }
 
   void _toggleTask(int index) {
     if (index >= 0 && index < _tasks.length) {
       setState(() {
-        _tasks[index]['done'] = !_tasks[index]['done'];
+        _tasks[index]['status'] =
+            _tasks[index]['status'] == 'pending' ? 'done' : 'pending';
       });
       _saveData();
     }
@@ -150,202 +215,253 @@ class _ZenToDoState extends State<ZenToDo> {
       await _saveData();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(_currentLang == 'ru' ? 'Задача удалена! 🗑️' : 'Task deleted! 🗑️'),
-          ),
+          SnackBar(content: Text(_texts['taskDeleted']!)),
         );
       }
     }
   }
 
-  void _editTask(int index) {
-    if (index >= 0 && index < _tasks.length) {
-      final controller = TextEditingController(text: _tasks[index]['text'] as String);
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          backgroundColor: _getBackgroundColor(),
-          title: Text(
-            _currentLang == 'ru' ? 'Редактировать' : 'Edit',
-            style: TextStyle(color: _getTextColor()),
-          ),
-          content: TextField(
-            controller: controller,
-            style: TextStyle(color: _getTextColor()),
-            decoration: InputDecoration(
-              hintText: _currentLang == 'ru' ? 'Новый текст' : 'New text',
-              hintStyle: TextStyle(color: _getTextColor().withOpacity(0.5)),
-              border: OutlineInputBorder(
-                borderSide: BorderSide(color: _getTextColor().withOpacity(0.3)),
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text(
-                _currentLang == 'ru' ? 'Отмена' : 'Cancel',
-                style: TextStyle(color: _getTextColor().withOpacity(0.7)),
-              ),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                final newText = controller.text.trim();
-                if (newText.isNotEmpty) {
-                  setState(() {
-                    _tasks[index]['text'] = newText;
-                  });
-                  _saveData();
-                }
-                Navigator.pop(context);
-              },
-              style: ElevatedButton.styleFrom(backgroundColor: _accentColor),
-              child: Text(
-                _currentLang == 'ru' ? 'Сохранить' : 'Save',
-                style: const TextStyle(color: Colors.white),
-              ),
-            ),
-          ],
-        ),
-      ).then((_) => controller.dispose());
+  void _editTask(int index, String newText) {
+    if (index >= 0 && index < _tasks.length && newText.isNotEmpty) {
+      setState(() {
+        _tasks[index]['text'] = newText;
+      });
+      _saveData();
     }
   }
 
+  List<Map<String, dynamic>> _getSortedTasks() {
+    List<Map<String, dynamic>> sorted = List.from(_tasks);
+    switch (_sortMode) {
+      case 'alpha':
+        sorted.sort((a, b) => a['text'].compareTo(b['text']));
+        break;
+      case 'alpha-rev':
+        sorted.sort((a, b) => b['text'].compareTo(a['text']));
+        break;
+      case 'length':
+        sorted.sort((a, b) => a['text'].length.compareTo(b['text'].length));
+        break;
+      case 'length-rev':
+        sorted.sort((a, b) => b['text'].length.compareTo(a['text'].length));
+        break;
+      case 'date-new':
+        sorted.sort((a, b) => b['createdAt'].compareTo(a['createdAt']));
+        break;
+      case 'date-old':
+        sorted.sort((a, b) => a['createdAt'].compareTo(b['createdAt']));
+        break;
+      case 'status':
+        sorted.sort((a, b) => a['status'].compareTo(b['status']));
+        break;
+      default:
+        break;
+    }
+    return sorted;
+  }
+
+  String _formatDate(String isoString) {
+    final date = DateTime.parse(isoString).toLocal();
+    final now = DateTime.now();
+    final diff = now.difference(date);
+
+    String dayMonth;
+    if (_currentLang == 'ru') {
+      const months = [
+        'янв', 'фев', 'мар', 'апр', 'мая', 'июн',
+        'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'
+      ];
+      dayMonth = '${date.day} ${months[date.month - 1]}';
+    } else {
+      const months = [
+        'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+      ];
+      dayMonth = '${months[date.month - 1]} ${date.day}';
+    }
+
+    final hour = date.hour.toString().padLeft(2, '0');
+    final minute = date.minute.toString().padLeft(2, '0');
+    return '$dayMonth, $hour:$minute';
+  }
+
+  // Цвета в зависимости от темы
+  Color get textColor =>
+      _currentTheme == 'light' ? Colors.black87 : Colors.white;
+  Color get secondaryTextColor =>
+      _currentTheme == 'light' ? Colors.black54 : Colors.white70;
+  Color get backgroundColor =>
+      _currentTheme == 'light' ? Colors.white : Colors.grey[900]!;
+  Color get surfaceColor => textColor.withOpacity(0.08);
+
+  // Градиент фона с анимацией
+  LinearGradient getThemeGradient() {
+    final animValue = _gradientAnimation.value;
+    switch (_currentTheme) {
+      case 'japanese':
+        return LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment(0.8 + animValue, 0.8 + animValue),
+          colors: const [Color(0xFF0D1117), Color(0xFF1E3A8A), Color(0xFF000000)],
+        );
+      case 'dark':
+        return LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment(0.8 + animValue, 0.8 + animValue),
+          colors: const [Color(0xFF1A1A2E), Color(0xFF16213E), Color(0xFF0F0F23)],
+        );
+      case 'light':
+      default:
+        return LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment(0.8 + animValue, 0.8 + animValue),
+          colors: const [Color(0xFFF8FAFC), Color(0xFFE2E8F0), Color(0xFFF1F5F9)],
+        );
+    }
+  }
+
+  static const Color accentColor = Color(0xFFFF99CC);
+
   @override
   void dispose() {
+    _gradientController.dispose();
     _newTaskController.dispose();
     super.dispose();
   }
-
-  Color _getTextColor() => _currentTheme == 'light' ? Colors.black87 : Colors.white;
-  Color _getSecondaryTextColor() => _currentTheme == 'light' ? Colors.black54 : Colors.white70;
-  Color _getBackgroundColor() => _currentTheme == 'light' ? Colors.white : Colors.grey[900]!;
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'ZenToDo',
+      title: 'ZenTodo 禅',
       theme: ThemeData(
         useMaterial3: true,
+        fontFamily: 'Inter', // Подключаем шрифт Inter
         brightness: _currentTheme == 'light' ? Brightness.light : Brightness.dark,
       ),
       home: Scaffold(
         body: Container(
-          decoration: BoxDecoration(
-            gradient: _getThemeGradient(_currentTheme),
-          ),
+          decoration: BoxDecoration(gradient: getThemeGradient()),
           child: SafeArea(
             child: Column(
               children: [
+                // Шапка
                 Padding(
                   padding: const EdgeInsets.all(24),
                   child: Column(
                     children: [
-                      Row(
-                        children: [
-                          Container(
-                            width: 70,
-                            height: 70,
-                            decoration: const BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: [_accentColor, Color(0xFFE066B3)],
-                              ),
-                              shape: BoxShape.circle,
-                            ),
-                            child: Icon(
-                              Icons.person,
-                              size: 35,
-                              color: _getTextColor(),
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: Text(
-                              _currentLang == 'ru' ? 'ZenToDo 禅' : 'ZenToDo Zen',
-                              style: TextStyle(
-                                fontSize: 32,
-                                fontWeight: FontWeight.w400,
-                                letterSpacing: 1.5,
-                                foreground: Paint()
-                                  ..shader = LinearGradient(
-                                    colors: _getThemeColors(_currentTheme),
-                                  ).createShader(const Rect.fromLTWH(0, 0, 200, 80)),
-                              ),
-                            ),
-                          ),
-                        ],
+                      Text(
+                        _texts['title']!,
+                        style: TextStyle(
+                          fontSize: 40,
+                          fontWeight: FontWeight.w300,
+                          foreground: Paint()
+                            ..shader = LinearGradient(
+                              colors: _getTitleGradientColors(),
+                            ).createShader(const Rect.fromLTWH(0, 0, 200, 80)),
+                        ),
                       ),
-                      const SizedBox(height: 32),
+                      const SizedBox(height: 24),
+                      // Поле ввода + кнопка Добавить
                       Row(
                         children: [
                           Expanded(
                             child: TextField(
                               controller: _newTaskController,
-                              style: TextStyle(color: _getTextColor(), fontSize: 18),
+                              style: TextStyle(color: textColor, fontSize: 18),
                               decoration: InputDecoration(
-                                hintText: _currentLang == 'ru'
-                                    ? 'Что в гармонии сегодня?'
-                                    : 'What brings harmony today?',
-                                hintStyle: TextStyle(color: _getSecondaryTextColor()),
+                                hintText: _texts['placeholder'],
+                                hintStyle: TextStyle(color: secondaryTextColor),
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(20),
-                                  borderSide: BorderSide(color: _getTextColor().withOpacity(0.2)),
+                                  borderSide: BorderSide(color: textColor.withOpacity(0.2)),
                                 ),
                                 enabledBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(20),
-                                  borderSide: BorderSide(color: _getTextColor().withOpacity(0.2)),
+                                  borderSide: BorderSide(color: textColor.withOpacity(0.2)),
                                 ),
                                 focusedBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(20),
-                                  borderSide: BorderSide(color: _getTextColor()),
+                                  borderSide: BorderSide(color: textColor),
                                 ),
                                 filled: true,
-                                fillColor: _getTextColor().withOpacity(0.1),
+                                fillColor: surfaceColor,
                                 contentPadding: const EdgeInsets.symmetric(
                                   horizontal: 20,
                                   vertical: 16,
                                 ),
                               ),
                               onSubmitted: (_) => _addTask(),
-                              textCapitalization: TextCapitalization.sentences,
                             ),
                           ),
                           const SizedBox(width: 12),
-                          FloatingActionButton(
+                          ElevatedButton(
                             onPressed: _addTask,
-                            backgroundColor: _accentColor,
-                            elevation: 8,
-                            highlightElevation: 12,
-                            child: const Icon(Icons.add, color: Colors.white, size: 24),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: accentColor,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 24,
+                                vertical: 16,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              elevation: 8,
+                            ),
+                            child: Text(
+                              _texts['submit']!,
+                              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                            ),
                           ),
                         ],
                       ),
                     ],
                   ),
                 ),
+
+                // Заголовок "Задачи Дзен"
+                Text(
+                  _texts['tasksTitle']!,
+                  style: TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.w300,
+                    color: textColor,
+                  ),
+                ),
+
+                // Кнопки сортировки
+                _buildSortButtons(),
+
+                // Список задач
                 Expanded(
                   child: _tasks.isEmpty
                       ? Center(
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(Icons.task_alt, size: 80, color: _getSecondaryTextColor()),
+                              Icon(
+                                Icons.task_alt,
+                                size: 80,
+                                color: secondaryTextColor,
+                              ),
                               const SizedBox(height: 24),
                               Text(
-                                _currentLang == 'ru' ? 'Задачи пусты' : 'No tasks yet',
+                                _currentLang == 'ru'
+                                    ? 'Задачи пусты'
+                                    : 'No tasks yet',
                                 style: TextStyle(
-                                  color: _getSecondaryTextColor(),
+                                  color: secondaryTextColor,
                                   fontSize: 20,
                                 ),
                               ),
                               const SizedBox(height: 8),
                               Text(
                                 _currentLang == 'ru'
-                                    ? 'Нажми + чтобы добавить'
-                                    : 'Press + to add tasks',
+                                    ? 'Напиши что‑нибудь и нажми Добавить'
+                                    : 'Write something and press Add',
                                 style: TextStyle(
-                                  color: _getSecondaryTextColor().withOpacity(0.7),
+                                  color: secondaryTextColor.withOpacity(0.7),
                                   fontSize: 16,
                                 ),
                               ),
@@ -353,127 +469,148 @@ class _ZenToDoState extends State<ZenToDo> {
                           ),
                         )
                       : ListView.builder(
-                          padding: const EdgeInsets.symmetric(horizontal: 24),
-                          itemCount: _tasks.length,
+                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                          itemCount: _getSortedTasks().length,
                           itemBuilder: (context, index) {
-                            final task = _tasks[index];
-                            return Dismissible(
-                              key: Key(task['id'] as String),
-                              direction: DismissDirection.endToStart,
-                              onDismissed: (_) => _deleteTask(index),
-                              background: Container(
-                                margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-                                decoration: BoxDecoration(
-                                  color: Colors.red,
-                                  borderRadius: BorderRadius.circular(20),
-                                ),
-                                alignment: Alignment.centerRight,
-                                padding: const EdgeInsets.only(right: 20),
-                                child: const Icon(
-                                  Icons.delete,
-                                  color: Colors.white,
-                                  size: 28,
-                                ),
-                              ),
-                              child: GestureDetector(
-                                onTap: () => _editTask(index),
-                                child: Container(
-                                  margin: const EdgeInsets.symmetric(vertical: 8),
-                                  padding: const EdgeInsets.all(20),
-                                  decoration: BoxDecoration(
-                                    color: _getTextColor().withOpacity(0.08),
-                                    borderRadius: BorderRadius.circular(20),
-                                    border: Border.all(color: _getTextColor().withOpacity(0.15)),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      GestureDetector(
-                                        onTap: () => _toggleTask(index),
-                                        child: Container(
-                                          width: 36,
-                                          height: 36,
-                                          decoration: BoxDecoration(
-                                            color: (task['done'] as bool)
-                                                ? const Color(0xFF10B981).withOpacity(0.4)
-                                                : Colors.transparent,
-                                            borderRadius: BorderRadius.circular(18),
-                                            border: Border.all(
-                                              color: (task['done'] as bool)
-                                                  ? const Color(0xFF10B981)
-                                                  : _getTextColor().withOpacity(0.3),
-                                              width: 2,
-                                            ),
-                                          ),
-                                          child: (task['done'] as bool)
-                                              ? const Icon(
-                                                  Icons.check,
-                                                  color: Color(0xFF10B981),
-                                                  size: 20,
-                                                )
-                                              : Icon(
-                                                  Icons.radio_button_unchecked,
-                                                  color: _getTextColor().withOpacity(0.5),
-                                                  size: 20,
-                                                ),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 16),
-                                      Expanded(
-                                        child: Text(
-                                          task['text'] as String,
-                                          style: TextStyle(
-                                            color: (task['done'] as bool)
-                                                ? _getSecondaryTextColor()
-                                                : _getTextColor(),
-                                            decoration: (task['done'] as bool)
-                                                ? TextDecoration.lineThrough
-                                                : null,
-                                            fontSize: 16,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
+                            final task = _getSortedTasks()[index];
+                            final originalIndex = _tasks.indexWhere((t) => t['id'] == task['id']);
+                            return AnimatedTaskCard(
+                              task: task,
+                              index: originalIndex,
+                              onToggle: _toggleTask,
+                              onDelete: _deleteTask,
+                              onEdit: _editTask,
+                              textColor: textColor,
+                              secondaryTextColor: secondaryTextColor,
+                              surfaceColor: surfaceColor,
+                              accentColor: accentColor,
+                              currentLang: _currentLang,
+                              texts: _texts,
+                              formatDate: _formatDate,
                             );
                           },
                         ),
                 ),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: _getTextColor().withOpacity(0.1),
-                    borderRadius: const BorderRadius.vertical(top: Radius.circular(25)),
-                  ),
-                  child: SafeArea(
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: [
-                        Row(
-                          children: [
-                            _buildThemeButton('japanese', '🌸'),
-                            const SizedBox(width: 8),
-                            _buildThemeButton('dark', '🌙'),
-                            const SizedBox(width: 8),
-                            _buildThemeButton('light', '☀️'),
-                          ],
-                        ),
-                        Row(
-                          children: [
-                            _buildLangButton('ru'),
-                            const SizedBox(width: 8),
-                            _buildLangButton('en'),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
+
+                // Футер
+                _buildFooter(),
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  // Панель сортировки
+  Widget _buildSortButtons() {
+    final sortModes = [
+      'none',
+      'alpha',
+      'alpha-rev',
+      'length',
+      'length-rev',
+      'date-new',
+      'date-old',
+      'status',
+    ];
+    final sortLabels = [
+      _texts['sortNone']!,
+      _texts['sortAlpha']!,
+      _texts['sortAlphaRev']!,
+      _texts['sortLength']!,
+      _texts['sortLengthRev']!,
+      _texts['sortDateNew']!,
+      _texts['sortDateOld']!,
+      _texts['sortStatus']!,
+    ];
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: surfaceColor,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: textColor.withOpacity(0.15)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            _texts['sort']!,
+            style: TextStyle(color: textColor, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: List.generate(sortModes.length, (i) {
+              final isActive = _sortMode == sortModes[i];
+              return GestureDetector(
+                onTap: () {
+                  setState(() => _sortMode = sortModes[i]);
+                  _saveData();
+                },
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  curve: Curves.easeOut,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    gradient: isActive
+                        ? LinearGradient(colors: _getButtonGradientColors())
+                        : null,
+                    color: isActive ? null : surfaceColor,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: isActive ? Colors.transparent : textColor.withOpacity(0.3),
+                    ),
+                  ),
+                  child: Text(
+                    sortLabels[i],
+                    style: TextStyle(
+                      color: isActive ? Colors.white : textColor,
+                      fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
+                    ),
+                  ),
+                ),
+              );
+            }),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Футер
+  Widget _buildFooter() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: surfaceColor,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(25)),
+      ),
+      child: SafeArea(
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: [
+            Row(
+              children: [
+                _buildThemeButton('japanese', '🌸'),
+                const SizedBox(width: 8),
+                _buildThemeButton('dark', '🌙'),
+                const SizedBox(width: 8),
+                _buildThemeButton('light', '☀️'),
+              ],
+            ),
+            Row(
+              children: [
+                _buildLangButton('ru'),
+                const SizedBox(width: 8),
+                _buildLangButton('en'),
+              ],
+            ),
+          ],
         ),
       ),
     );
@@ -486,33 +623,25 @@ class _ZenToDoState extends State<ZenToDo> {
         setState(() => _currentTheme = theme);
         _saveData();
       },
-      child: Container(
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOut,
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           gradient: isActive
-              ? const LinearGradient(colors: [_accentColor, Color(0xFFE066B3)])
+              ? LinearGradient(colors: _getButtonGradientColors())
               : null,
           shape: BoxShape.circle,
           border: Border.all(
-            color: isActive ? _getTextColor() : _getTextColor().withOpacity(0.3),
+            color: isActive ? Colors.transparent : textColor.withOpacity(0.3),
             width: 2,
           ),
-          boxShadow: isActive
-              ? [
-                  BoxShadow(
-                    color: _accentColor.withOpacity(0.4),
-                    blurRadius: 16,
-                    spreadRadius: 0,
-                  )
-                ]
-              : null,
         ),
         child: Text(
           icon,
           style: TextStyle(
             fontSize: 20,
-            color: isActive ? _getTextColor() : _getTextColor().withOpacity(0.6),
-            fontWeight: FontWeight.w600,
+            color: isActive ? Colors.white : textColor.withOpacity(0.6),
           ),
         ),
       ),
@@ -523,25 +652,30 @@ class _ZenToDoState extends State<ZenToDo> {
     final isActive = _currentLang == lang;
     return GestureDetector(
       onTap: () {
-        setState(() => _currentLang = lang);
+        setState(() {
+          _currentLang = lang;
+          _updateTexts();
+        });
         _saveData();
       },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOut,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
           gradient: isActive
-              ? const LinearGradient(colors: [_accentColor, Color(0xFFE066B3)])
+              ? LinearGradient(colors: _getButtonGradientColors())
               : null,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: isActive ? _getTextColor() : _getTextColor().withOpacity(0.3),
+            color: isActive ? Colors.transparent : textColor.withOpacity(0.3),
             width: 2,
           ),
         ),
         child: Text(
           lang.toUpperCase(),
           style: TextStyle(
-            color: isActive ? _getTextColor() : _getTextColor().withOpacity(0.6),
+            color: isActive ? Colors.white : textColor.withOpacity(0.6),
             fontWeight: FontWeight.w700,
             fontSize: 14,
           ),
@@ -550,35 +684,273 @@ class _ZenToDoState extends State<ZenToDo> {
     );
   }
 
-  LinearGradient _getThemeGradient(String theme) {
-    switch (theme) {
+  List<Color> _getTitleGradientColors() {
+    switch (_currentTheme) {
       case 'japanese':
-        return const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF0D1117), Color(0xFF1E3A8A), Color(0xFF000000)],
-        );
-      case 'dark':
-        return const LinearGradient(
-          colors: [Color(0xFF1A1A2E), Color(0xFF16213E), Color(0xFF0F0F23)],
-        );
-      case 'light':
-      default:
-        return const LinearGradient(
-          colors: [Color(0xFFF8FAFC), Color(0xFFE2E8F0), Color(0xFFF1F5F9)],
-        );
-    }
-  }
-
-  List<Color> _getThemeColors(String theme) {
-    switch (theme) {
-      case 'japanese':
-        return const [Color(0xFFF4C7D6), _accentColor, Color(0xFF1E3A8A)];
+        return const [Color(0xFFF4C7D6), Color(0xFFFF99CC), Color(0xFF1E3A8A)];
       case 'dark':
         return const [Color(0xFFEC4899), Color(0xFF8B5CF6)];
       case 'light':
       default:
         return const [Color(0xFF3B82F6), Color(0xFF8B5CF6)];
     }
+  }
+
+  List<Color> _getButtonGradientColors() {
+    switch (_currentTheme) {
+      case 'japanese':
+        return const [Color(0xFFFF99CC), Color(0xFFE066B3)];
+      case 'dark':
+        return const [Color(0xFFEC4899), Color(0xFF8B5CF6)];
+      case 'light':
+      default:
+        return const [Color(0xFF3B82F6), Color(0xFF8B5CF6)];
+    }
+  }
+}
+
+// Анимированная карточка задачи
+class AnimatedTaskCard extends StatefulWidget {
+  final Map<String, dynamic> task;
+  final int index;
+  final Function(int) onToggle;
+  final Function(int) onDelete;
+  final Function(int, String) onEdit;
+  final Color textColor;
+  final Color secondaryTextColor;
+  final Color surfaceColor;
+  final Color accentColor;
+  final String currentLang;
+  final Map<String, String> texts;
+  final String Function(String) formatDate;
+
+  const AnimatedTaskCard({
+    Key? key,
+    required this.task,
+    required this.index,
+    required this.onToggle,
+    required this.onDelete,
+    required this.onEdit,
+    required this.textColor,
+    required this.secondaryTextColor,
+    required this.surfaceColor,
+    required this.accentColor,
+    required this.currentLang,
+    required this.texts,
+    required this.formatDate,
+  }) : super(key: key);
+
+  @override
+  State<AnimatedTaskCard> createState() => _AnimatedTaskCardState();
+}
+
+class _AnimatedTaskCardState extends State<AnimatedTaskCard>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<Offset> _offsetAnimation;
+  late Animation<double> _fadeAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 400),
+      vsync: this,
+    );
+    _offsetAnimation = Tween<Offset>(
+      begin: const Offset(0, 0.3),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
+    _fadeAnimation = Tween<double>(begin: 0, end: 1).animate(
+        CurvedAnimation(parent: _controller, curve: Curves.easeOut));
+    _controller.forward();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _fadeAnimation,
+      child: SlideTransition(
+        position: _offsetAnimation,
+        child: _buildCard(),
+      ),
+    );
+  }
+
+  Widget _buildCard() {
+    final task = widget.task;
+    final isDone = task['status'] == 'done';
+    final statusText = isDone ? widget.texts['statusDone']! : widget.texts['statusPending']!;
+    final toggleText = isDone ? widget.texts['togglePending']! : widget.texts['toggleDone']!;
+
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: widget.surfaceColor,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: widget.textColor.withOpacity(0.15)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: _buildEditableText()),
+              const SizedBox(width: 8),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    statusText,
+                    style: TextStyle(
+                      color: isDone ? Colors.green : widget.accentColor,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    widget.formatDate(task['createdAt']),
+                    style: TextStyle(
+                      color: widget.secondaryTextColor,
+                      fontSize: 10,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              _buildActionButton(
+                onPressed: () => widget.onToggle(widget.index),
+                label: toggleText,
+                color: isDone ? Colors.orange : Colors.green,
+              ),
+              const SizedBox(width: 8),
+              _buildActionButton(
+                onPressed: _showEditDialog,
+                label: widget.texts['edit']!,
+                color: Colors.purple,
+              ),
+              const SizedBox(width: 8),
+              _buildActionButton(
+                onPressed: () => widget.onDelete(widget.index),
+                label: widget.texts['delete']!,
+                color: Colors.red,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEditableText() {
+    final TextEditingController controller = TextEditingController(text: widget.task['text']);
+    final FocusNode focusNode = FocusNode();
+    bool isEditing = false;
+
+    return StatefulBuilder(
+      builder: (context, setState) {
+        return GestureDetector(
+          onDoubleTap: () {
+            setState(() => isEditing = true);
+            focusNode.requestFocus();
+          },
+          child: isEditing
+              ? TextField(
+                  controller: controller,
+                  focusNode: focusNode,
+                  style: TextStyle(color: widget.textColor, fontSize: 16),
+                  decoration: InputDecoration(
+                    border: InputBorder.none,
+                    hintText: widget.texts['edit'],
+                  ),
+                  onSubmitted: (newText) {
+                    widget.onEdit(widget.index, newText.trim());
+                    setState(() => isEditing = false);
+                  },
+                  onEditingComplete: () {
+                    widget.onEdit(widget.index, controller.text.trim());
+                    setState(() => isEditing = false);
+                  },
+                )
+              : Text(
+                  widget.task['text'],
+                  style: TextStyle(
+                    color: widget.task['status'] == 'done'
+                        ? widget.secondaryTextColor
+                        : widget.textColor,
+                    decoration: widget.task['status'] == 'done'
+                        ? TextDecoration.lineThrough
+                        : null,
+                    fontSize: 16,
+                  ),
+                ),
+        );
+      },
+    );
+  }
+
+  void _showEditDialog() {
+    final controller = TextEditingController(text: widget.task['text']);
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        title: Text(widget.texts['edit']!, style: TextStyle(color: widget.textColor)),
+        content: TextField(
+          controller: controller,
+          style: TextStyle(color: widget.textColor),
+          decoration: InputDecoration(
+            hintText: widget.texts['edit'],
+            hintStyle: TextStyle(color: widget.secondaryTextColor),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(widget.texts['cancel']!, style: TextStyle(color: widget.secondaryTextColor)),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              widget.onEdit(widget.index, controller.text.trim());
+              Navigator.pop(context);
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: widget.accentColor),
+            child: Text(widget.texts['save']!, style: const TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActionButton({
+    required VoidCallback onPressed,
+    required String label,
+    required Color color,
+  }) {
+    return ElevatedButton(
+      onPressed: onPressed,
+      style: ElevatedButton.styleFrom(
+        backgroundColor: color,
+        foregroundColor: Colors.white,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+        minimumSize: const Size(0, 36),
+      ),
+      child: Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+    );
   }
 }
