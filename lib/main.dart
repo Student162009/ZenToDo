@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
-  runApp(ZenToDo());
+  runApp(const ZenToDo());
 }
 
 class ZenToDo extends StatefulWidget {
+  const ZenToDo({super.key});
+
   @override
-  _ZenToDoState createState() => _ZenToDoState();
+  State<ZenToDo> createState() => _ZenToDoState();
 }
 
 class _ZenToDoState extends State<ZenToDo> {
@@ -61,72 +63,88 @@ class _ZenToDoState extends State<ZenToDo> {
       });
       _newTaskController.clear();
       _saveData();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Задача добавлена! ✅')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Задача добавлена! ✅')),
+        );
+      }
     }
   }
 
   void _toggleTask(int index) {
-    setState(() {
-      _tasks[index]['done'] = !_tasks[index]['done'];
-    });
-    _saveData();
+    if (index >= 0 && index < _tasks.length) {
+      setState(() {
+        _tasks[index]['done'] = !_tasks[index]['done'];
+      });
+      _saveData();
+    }
   }
 
   void _deleteTask(int index) {
-    setState(() {
-      _tasks.removeAt(index);
-    });
-    _saveData();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Задача удалена! 🗑️')),
-    );
+    if (index >= 0 && index < _tasks.length) {
+      setState(() {
+        _tasks.removeAt(index);
+      });
+      _saveData();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Задача удалена! 🗑️')),
+        );
+      }
+    }
   }
 
   void _editTask(int index) {
-    final controller = TextEditingController(text: _tasks[index]['text']);
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: Colors.grey[900],
-        title: Text(
-          'Редактировать',
-          style: TextStyle(color: Colors.white),
-        ),
-        content: TextField(
-          controller: controller,
-          style: TextStyle(color: Colors.white),
-          decoration: InputDecoration(
-            hintText: 'Новый текст',
-            hintStyle: TextStyle(color: Colors.white54),
-            border: OutlineInputBorder(
-              borderSide: BorderSide(color: Colors.white38),
+    if (index >= 0 && index < _tasks.length) {
+      final controller = TextEditingController(text: _tasks[index]['text'] as String);
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          backgroundColor: Colors.grey[900],
+          title: const Text(
+            'Редактировать',
+            style: TextStyle(color: Colors.white),
+          ),
+          content: TextField(
+            controller: controller,
+            style: const TextStyle(color: Colors.white),
+            decoration: InputDecoration(
+              hintText: 'Новый текст',
+              hintStyle: TextStyle(color: Colors.white54),
+              border: OutlineInputBorder(
+                borderSide: const BorderSide(color: Colors.white38),
+              ),
             ),
           ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text('Отмена', style: TextStyle(color: Colors.grey)),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                final newText = controller.text.trim();
+                if (newText.isNotEmpty) {
+                  setState(() {
+                    _tasks[index]['text'] = newText;
+                  });
+                  _saveData();
+                }
+                Navigator.pop(context);
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF99CC)),
+              child: const Text('Сохранить', style: TextStyle(color: Colors.white)),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Отмена', style: TextStyle(color: Colors.grey)),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              final newText = controller.text.trim();
-              if (newText.isNotEmpty) {
-                setState(() {
-                  _tasks[index]['text'] = newText;
-                });
-                _saveData();
-              }
-              Navigator.pop(context);
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: Color(0xFFFF99CC)),
-            child: Text('Сохранить', style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
+      ).then((_) => controller.dispose());
+    }
+  }
+
+  @override
+  void dispose() {
+    _newTaskController.dispose();
+    super.dispose();
   }
 
   @override
@@ -145,7 +163,7 @@ class _ZenToDoState extends State<ZenToDo> {
               children: [
                 // HEADER
                 Padding(
-                  padding: EdgeInsets.all(24),
+                  padding: const EdgeInsets.all(24),
                   child: Column(
                     children: [
                       Row(
@@ -154,19 +172,19 @@ class _ZenToDoState extends State<ZenToDo> {
                           Container(
                             width: 70,
                             height: 70,
-                            decoration: BoxDecoration(
+                            decoration: const BoxDecoration(
                               gradient: LinearGradient(
                                 colors: [Color(0xFFFF99CC), Color(0xFFE066B3)],
                               ),
                               shape: BoxShape.circle,
                             ),
-                            child: Icon(
+                            child: const Icon(
                               Icons.person,
                               size: 35,
                               color: Colors.white,
                             ),
                           ),
-                          SizedBox(width: 16),
+                          const SizedBox(width: 16),
                           Expanded(
                             child: Text(
                               _currentLang == 'ru' ? 'ZenToDo 禅' : 'ZenToDo Zen',
@@ -177,20 +195,20 @@ class _ZenToDoState extends State<ZenToDo> {
                                 foreground: Paint()
                                   ..shader = LinearGradient(
                                     colors: _getThemeColors(_currentTheme),
-                                  ).createShader(Rect.fromLTWH(0, 0, 200, 80)),
+                                  ).createShader(const Rect.fromLTWH(0, 0, 200, 80)),
                               ),
                             ),
                           ),
                         ],
                       ),
-                      SizedBox(height: 32),
+                      const SizedBox(height: 32),
                       // INPUT + КНОПКА
                       Row(
                         children: [
                           Expanded(
                             child: TextField(
                               controller: _newTaskController,
-                              style: TextStyle(color: Colors.white, fontSize: 18),
+                              style: const TextStyle(color: Colors.white, fontSize: 18),
                               decoration: InputDecoration(
                                 hintText: _currentLang == 'ru'
                                     ? 'Что в гармонии сегодня?'
@@ -198,19 +216,19 @@ class _ZenToDoState extends State<ZenToDo> {
                                 hintStyle: TextStyle(color: Colors.white70),
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(20),
-                                  borderSide: BorderSide(color: Colors.white24),
+                                  borderSide: const BorderSide(color: Colors.white24),
                                 ),
                                 enabledBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(20),
-                                  borderSide: BorderSide(color: Colors.white24),
+                                  borderSide: const BorderSide(color: Colors.white24),
                                 ),
                                 focusedBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(20),
-                                  borderSide: BorderSide(color: Colors.white),
+                                  borderSide: const BorderSide(color: Colors.white),
                                 ),
                                 filled: true,
                                 fillColor: Colors.white.withOpacity(0.15),
-                                contentPadding: EdgeInsets.symmetric(
+                                contentPadding: const EdgeInsets.symmetric(
                                   horizontal: 20,
                                   vertical: 16,
                                 ),
@@ -219,14 +237,14 @@ class _ZenToDoState extends State<ZenToDo> {
                               textCapitalization: TextCapitalization.sentences,
                             ),
                           ),
-                          SizedBox(width: 12),
-                          // КНОПКА + (ГАРАНТИРОВАННО РАБОТАЕТ!)
+                          const SizedBox(width: 12),
+                          // КНОПКА +
                           FloatingActionButton(
                             onPressed: _addTask,
-                            backgroundColor: Color(0xFFFF99CC),
+                            backgroundColor: const Color(0xFFFF99CC),
                             elevation: 8,
                             highlightElevation: 12,
-                            child: Icon(Icons.add, color: Colors.white, size: 24),
+                            child: const Icon(Icons.add, color: Colors.white, size: 24),
                           ),
                         ],
                       ),
@@ -241,7 +259,7 @@ class _ZenToDoState extends State<ZenToDo> {
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Icon(Icons.task_alt, size: 80, color: Colors.white54),
-                              SizedBox(height: 24),
+                              const SizedBox(height: 24),
                               Text(
                                 _currentLang == 'ru' ? 'Задачи пусты' : 'No tasks yet',
                                 style: TextStyle(
@@ -249,7 +267,7 @@ class _ZenToDoState extends State<ZenToDo> {
                                   fontSize: 20,
                                 ),
                               ),
-                              SizedBox(height: 8),
+                              const SizedBox(height: 8),
                               Text(
                                 _currentLang == 'ru'
                                     ? 'Нажми + чтобы добавить'
@@ -263,23 +281,23 @@ class _ZenToDoState extends State<ZenToDo> {
                           ),
                         )
                       : ListView.builder(
-                          padding: EdgeInsets.symmetric(horizontal: 24),
+                          padding: const EdgeInsets.symmetric(horizontal: 24),
                           itemCount: _tasks.length,
                           itemBuilder: (context, index) {
                             final task = _tasks[index];
                             return Dismissible(
-                              key: Key(task['id']),
+                              key: Key(task['id'] as String),
                               direction: DismissDirection.endToStart,
                               onDismissed: (_) => _deleteTask(index),
                               background: Container(
-                                margin: EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                                margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
                                 decoration: BoxDecoration(
                                   color: Colors.red,
                                   borderRadius: BorderRadius.circular(20),
                                 ),
                                 alignment: Alignment.centerRight,
-                                padding: EdgeInsets.only(right: 20),
-                                child: Icon(
+                                padding: const EdgeInsets.only(right: 20),
+                                child: const Icon(
                                   Icons.delete,
                                   color: Colors.white,
                                   size: 28,
@@ -288,8 +306,8 @@ class _ZenToDoState extends State<ZenToDo> {
                               child: GestureDetector(
                                 onTap: () => _editTask(index),
                                 child: Container(
-                                  margin: EdgeInsets.symmetric(vertical: 8),
-                                  padding: EdgeInsets.all(20),
+                                  margin: const EdgeInsets.symmetric(vertical: 8),
+                                  padding: const EdgeInsets.all(20),
                                   decoration: BoxDecoration(
                                     color: Colors.white.withOpacity(0.12),
                                     borderRadius: BorderRadius.circular(20),
@@ -304,40 +322,40 @@ class _ZenToDoState extends State<ZenToDo> {
                                           width: 36,
                                           height: 36,
                                           decoration: BoxDecoration(
-                                            color: task['done']
-                                                ? Color(0xFF10B981).withOpacity(0.4)
+                                            color: (task['done'] as bool)
+                                                ? const Color(0xFF10B981).withOpacity(0.4)
                                                 : Colors.transparent,
                                             borderRadius: BorderRadius.circular(18),
                                             border: Border.all(
-                                              color: task['done']
-                                                  ? Color(0xFF10B981)
+                                              color: (task['done'] as bool)
+                                                  ? const Color(0xFF10B981)
                                                   : Colors.white38,
                                               width: 2,
                                             ),
                                           ),
-                                          child: task['done']
-                                              ? Icon(
+                                          child: (task['done'] as bool)
+                                              ? const Icon(
                                                   Icons.check,
                                                   color: Color(0xFF10B981),
                                                   size: 20,
                                                 )
-                                              : Icon(
+                                              : const Icon(
                                                   Icons.radio_button_unchecked,
                                                   color: Colors.white54,
                                                   size: 20,
                                                 ),
                                         ),
                                       ),
-                                      SizedBox(width: 16),
+                                      const SizedBox(width: 16),
                                       // ТЕКСТ
                                       Expanded(
                                         child: Text(
-                                          task['text'],
+                                          task['text'] as String,
                                           style: TextStyle(
-                                            color: task['done']
+                                            color: (task['done'] as bool)
                                                 ? Colors.white70
                                                 : Colors.white,
-                                            decoration: task['done']
+                                            decoration: (task['done'] as bool)
                                                 ? TextDecoration.lineThrough
                                                 : null,
                                             fontSize: 16,
@@ -355,10 +373,10 @@ class _ZenToDoState extends State<ZenToDo> {
                 // КОНТРОЛЛЕРЫ
                 Container(
                   width: double.infinity,
-                  padding: EdgeInsets.all(20),
+                  padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
                     color: Colors.black.withOpacity(0.4),
-                    borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(25)),
                   ),
                   child: SafeArea(
                     child: Row(
@@ -368,9 +386,9 @@ class _ZenToDoState extends State<ZenToDo> {
                         Row(
                           children: [
                             _buildThemeButton('japanese', '🌸'),
-                            SizedBox(width: 8),
+                            const SizedBox(width: 8),
                             _buildThemeButton('dark', '🌙'),
-                            SizedBox(width: 8),
+                            const SizedBox(width: 8),
                             _buildThemeButton('light', '☀️'),
                           ],
                         ),
@@ -378,7 +396,7 @@ class _ZenToDoState extends State<ZenToDo> {
                         Row(
                           children: [
                             _buildLangButton('ru'),
-                            SizedBox(width: 8),
+                            const SizedBox(width: 8),
                             _buildLangButton('en'),
                           ],
                         ),
@@ -402,10 +420,10 @@ class _ZenToDoState extends State<ZenToDo> {
         _saveData();
       },
       child: Container(
-        padding: EdgeInsets.all(12),
+        padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           gradient: isActive
-              ? LinearGradient(colors: [Color(0xFFFF99CC), Color(0xFFE066B3)])
+              ? const LinearGradient(colors: [Color(0xFFFF99CC), Color(0xFFE066B3)])
               : null,
           shape: BoxShape.circle,
           border: Border.all(
@@ -415,7 +433,7 @@ class _ZenToDoState extends State<ZenToDo> {
           boxShadow: isActive
               ? [
                   BoxShadow(
-                    color: Color(0xFFFF99CC).withOpacity(0.4),
+                    color: const Color(0xFFFF99CC).withOpacity(0.4),
                     blurRadius: 16,
                     spreadRadius: 0,
                   )
@@ -442,10 +460,10 @@ class _ZenToDoState extends State<ZenToDo> {
         _saveData();
       },
       child: Container(
-        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
           gradient: isActive
-              ? LinearGradient(colors: [Color(0xFFFF99CC), Color(0xFFE066B3)])
+              ? const LinearGradient(colors: [Color(0xFFFF99CC), Color(0xFFE066B3)])
               : null,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
@@ -468,18 +486,18 @@ class _ZenToDoState extends State<ZenToDo> {
   LinearGradient _getThemeGradient(String theme) {
     switch (theme) {
       case 'japanese':
-        return LinearGradient(
+        return const LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [Color(0xFF0D1117), Color(0xFF1E3A8A), Color(0xFF000000)],
         );
       case 'dark':
-        return LinearGradient(
+        return const LinearGradient(
           colors: [Color(0xFF1A1A2E), Color(0xFF16213E), Color(0xFF0F0F23)],
         );
       case 'light':
       default:
-        return LinearGradient(
+        return const LinearGradient(
           colors: [Color(0xFFF8FAFC), Color(0xFFE2E8F0), Color(0xFFF1F5F9)],
         );
     }
@@ -488,12 +506,12 @@ class _ZenToDoState extends State<ZenToDo> {
   List<Color> _getThemeColors(String theme) {
     switch (theme) {
       case 'japanese':
-        return [Color(0xFFF4C7D6), Color(0xFFFF99CC), Color(0xFF1E3A8A)];
+        return const [Color(0xFFF4C7D6), Color(0xFFFF99CC), Color(0xFF1E3A8A)];
       case 'dark':
-        return [Color(0xFFEC4899), Color(0xFF8B5CF6)];
+        return const [Color(0xFFEC4899), Color(0xFF8B5CF6)];
       case 'light':
       default:
-        return [Color(0xFF3B82F6), Color(0xFF8B5CF6)];
+        return const [Color(0xFF3B82F6), Color(0xFF8B5CF6)];
     }
   }
 }
