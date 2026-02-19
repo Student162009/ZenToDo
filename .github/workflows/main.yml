@@ -2,8 +2,8 @@ name: Build Android + Windows
 
 on:
   push:
-    branches: [ main, master ]   # укажите свою основную ветку
-  workflow_dispatch:              # возможность ручного запуска
+    branches: [ main, master ]
+  workflow_dispatch:
 
 jobs:
   build-android:
@@ -51,9 +51,14 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      # Добавляем поддержку Windows, если её ещё нет
+      - name: Ensure Windows platform support
+        run: flutter create --platforms=windows .
+
       - name: Build Windows executable
         run: flutter build windows --release
 
+      # Исправлена команда: добавлен пробел перед -DestinationPath
       - name: Archive Windows build
         run: Compress-Archive -Path build\windows\runner\Release\* -DestinationPath ZenTodo-windows.zip
         shell: pwsh
