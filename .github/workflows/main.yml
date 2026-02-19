@@ -12,11 +12,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Java
+      - name: Setup Java 17
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
-          java-version: '11'
+          java-version: '17'
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
@@ -51,16 +51,48 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      # Добавляем поддержку Windows, если её ещё нет
+      - name: Enable Windows desktop support (if needed)
+        run: flutter config --enable-windows-desktop
+
       - name: Ensure Windows platform support
         run: flutter create --platforms=windows .
 
       - name: Build Windows executable
         run: flutter build windows --release
 
-      # Исправлена команда: добавлен пробел перед -DestinationPath
+      # Диагностика: ищем папку Release
+      - name: Locate Release folder
+        run: |
+          $paths = @(
+            "build\windows\runner\Release",
+            "build\windows\x64\runner\Release"
+          )
+          $found = $false
+          foreach ($p in $paths) {
+            if (Test-Path $p) {
+              Write-Host "✅ Found Release folder at: $p"
+              Write-Host "Contents:"
+              Get-ChildItem $p
+              $found = $true
+              break
+            }
+          }
+          if (-not $found) {
+            Write-Error "❌ Release folder not found in any expected location."
+            exit 1
+          }
+        shell: pwsh
+
       - name: Archive Windows build
-        run: Compress-Archive -Path build\windows\runner\Release\* -DestinationPath ZenTodo-windows.zip
+        run: |
+          if (Test-Path build\windows\runner\Release) {
+            Compress-Archive -Path build\windows\runner\Release\* -DestinationPath ZenTodo-windows.zip
+          } elseif (Test-Path build\windows\x64\runner\Release) {
+            Compress-Archive -Path build\windows\x64\runner\Release\* -DestinationPath ZenTodo-windows.zip
+          } else {
+            Write-Error "Release folder not found"
+            exit 1
+          }
         shell: pwsh
 
       - name: Upload Windows artifact
