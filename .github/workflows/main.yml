@@ -1,31 +1,102 @@
-name: Build ZenToDo APK
+name: Build Android + Windows
+
 on:
   push:
-    branches: [ main ]
-  workflow_dispatch:  # ← Ручной запуск
+    branches: [ main, master ]
+  workflow_dispatch:
 
 jobs:
-  build:
+  build-android:
     runs-on: ubuntu-latest
-    
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-    
-    - name: Setup Flutter
-      uses: subosito/flutter-action@v2
-      with:
-        flutter-version: '3.x'
-        channel: 'stable'
-    
-    - name: Get dependencies
-      run: flutter pub get
-    
-    - name: Build APK
-      run: flutter build apk --release
-    
-    - name: Upload APK
-      uses: actions/upload-artifact@v4
-      with:
-        name: ZenToDo-release.apk
-        path: build/app/outputs/flutter-apk/app-release.apk
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.x'
+          channel: 'stable'
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build APK
+        run: flutter build apk --release
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.x'
+          channel: 'stable'
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Enable Windows desktop support (if needed)
+        run: flutter config --enable-windows-desktop
+
+      - name: Ensure Windows platform support
+        run: flutter create --platforms=windows .
+
+      - name: Build Windows executable
+        run: flutter build windows --release
+
+      # Диагностика: ищем папку Release
+      - name: Locate Release folder
+        run: |
+          $paths = @(
+            "build\windows\runner\Release",
+            "build\windows\x64\runner\Release"
+          )
+          $found = $false
+          foreach ($p in $paths) {
+            if (Test-Path $p) {
+              Write-Host "✅ Found Release folder at: $p"
+              Write-Host "Contents:"
+              Get-ChildItem $p
+              $found = $true
+              break
+            }
+          }
+          if (-not $found) {
+            Write-Error "❌ Release folder not found in any expected location."
+            exit 1
+          }
+        shell: pwsh
+
+      - name: Archive Windows build
+        run: |
+          if (Test-Path build\windows\runner\Release) {
+            Compress-Archive -Path build\windows\runner\Release\* -DestinationPath ZenTodo-windows.zip
+          } elseif (Test-Path build\windows\x64\runner\Release) {
+            Compress-Archive -Path build\windows\x64\runner\Release\* -DestinationPath ZenTodo-windows.zip
+          } else {
+            Write-Error "Release folder not found"
+            exit 1
+          }
+        shell: pwsh
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-exe
+          path: ZenTodo-windows.zip
