@@ -22,15 +22,12 @@ class _ZenTodoAppState extends State<ZenTodoApp> with TickerProviderStateMixin {
 
   final TextEditingController _newTaskController = TextEditingController();
 
-  // Анимация фона (пульсация)
   late AnimationController _gradientController;
   late Animation<double> _gradientAnimation;
 
-  // Музыка
   final AudioPlayer _audioPlayer = AudioPlayer();
   bool _isMusicPlaying = false;
 
-  // Локализация
   late Map<String, String> _texts;
   final Map<String, Map<String, String>> _allTexts = {
     'ru': {
@@ -108,7 +105,6 @@ class _ZenTodoAppState extends State<ZenTodoApp> with TickerProviderStateMixin {
     _texts = _allTexts[_currentLang]!;
   }
 
-  // Загрузка данных из SharedPreferences
   Future<void> _loadData() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -123,7 +119,6 @@ class _ZenTodoAppState extends State<ZenTodoApp> with TickerProviderStateMixin {
           try {
             return Map<String, dynamic>.from(jsonDecode(taskJson) as Map);
           } catch (e) {
-            // Совместимость со старым форматом (id|text|done)
             final parts = taskJson.split('|');
             if (parts.length >= 2) {
               return {
@@ -138,7 +133,6 @@ class _ZenTodoAppState extends State<ZenTodoApp> with TickerProviderStateMixin {
           }
         }).where((task) => task['id'].isNotEmpty).toList();
 
-        // Приводим все задачи к единому формату
         for (var task in _tasks) {
           task['createdAt'] ??= DateTime.now().toIso8601String();
           task['status'] ??= (task['done'] == true ? 'done' : 'pending');
@@ -150,7 +144,6 @@ class _ZenTodoAppState extends State<ZenTodoApp> with TickerProviderStateMixin {
     }
   }
 
-  // Сохранение данных
   Future<void> _saveData() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -178,7 +171,7 @@ class _ZenTodoAppState extends State<ZenTodoApp> with TickerProviderStateMixin {
   Future<void> _loadMusicState() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
-      _isMusicPlaying = prefs.getBool('music') ?? false;
+      _isMusicPlaying = prefs.getBool('music') ?? false; // по умолчанию выключена
     });
     if (_isMusicPlaying) {
       _playMusic();
@@ -187,12 +180,11 @@ class _ZenTodoAppState extends State<ZenTodoApp> with TickerProviderStateMixin {
 
   void _initAudioPlayer() {
     _audioPlayer.setReleaseMode(ReleaseMode.loop);
-    _audioPlayer.setVolume(0.3); // фоновая громкость
+    _audioPlayer.setVolume(0.3);
   }
 
   Future<void> _playMusic() async {
     try {
-      // Замените 'audio/lofi.mp3' на путь к вашему файлу
       await _audioPlayer.play(AssetSource('audio/lofi.mp3'));
     } catch (e) {
       debugPrint('Error playing music: $e');
@@ -326,14 +318,12 @@ class _ZenTodoAppState extends State<ZenTodoApp> with TickerProviderStateMixin {
     return '$dayMonth, $hour:$minute';
   }
 
-  // Цвета в зависимости от темы
   Color get textColor =>
       _currentTheme == 'light' ? Colors.black87 : Colors.white;
   Color get secondaryTextColor =>
       _currentTheme == 'light' ? Colors.black54 : Colors.white70;
   Color get surfaceColor => textColor.withOpacity(0.08);
 
-  // Градиент фона с анимацией
   LinearGradient getThemeGradient() {
     final animValue = _gradientAnimation.value;
     switch (_currentTheme) {
@@ -383,158 +373,170 @@ class _ZenTodoAppState extends State<ZenTodoApp> with TickerProviderStateMixin {
         body: Container(
           decoration: BoxDecoration(gradient: getThemeGradient()),
           child: SafeArea(
-            child: Column(
-              children: [
-                // Шапка
-                Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    children: [
-                      Text(
-                        _texts['title']!,
-                        style: TextStyle(
-                          fontSize: 40,
-                          fontWeight: FontWeight.w300,
-                          foreground: Paint()
-                            ..shader = LinearGradient(
-                              colors: _getTitleGradientColors(),
-                            ).createShader(const Rect.fromLTWH(0, 0, 200, 80)),
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      // Поле ввода + кнопка Добавить
-                      Row(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                // Определяем, широкий ли экран (планшет или большой телефон в landscape)
+                final bool isWide = constraints.maxWidth > 600;
+                final double horizontalPadding = isWide ? 40 : 24;
+                final double titleFontSize = isWide ? 32 : 40;
+                final double inputFontSize = isWide ? 14 : 18;
+                final double buttonFontSize = isWide ? 14 : 18;
+                final double tasksTitleFontSize = isWide ? 24 : 28;
+                final double verticalSpacing = isWide ? 16 : 24;
+
+                return Column(
+                  children: [
+                    // Адаптивный хедер
+                    Padding(
+                      padding: EdgeInsets.all(horizontalPadding),
+                      child: Column(
                         children: [
-                          Expanded(
-                            child: TextField(
-                              controller: _newTaskController,
-                              style: TextStyle(color: textColor, fontSize: 18),
-                              decoration: InputDecoration(
-                                hintText: _texts['placeholder'],
-                                hintStyle: TextStyle(color: secondaryTextColor),
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(20),
-                                  borderSide: BorderSide(color: textColor.withOpacity(0.2)),
-                                ),
-                                enabledBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(20),
-                                  borderSide: BorderSide(color: textColor.withOpacity(0.2)),
-                                ),
-                                focusedBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(20),
-                                  borderSide: BorderSide(color: textColor),
-                                ),
-                                filled: true,
-                                fillColor: surfaceColor,
-                                contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 20,
-                                  vertical: 16,
-                                ),
-                              ),
-                              onSubmitted: (_) => _addTask(),
+                          Text(
+                            _texts['title']!,
+                            style: TextStyle(
+                              fontSize: titleFontSize,
+                              fontWeight: FontWeight.w300,
+                              foreground: Paint()
+                                ..shader = LinearGradient(
+                                  colors: _getTitleGradientColors(),
+                                ).createShader(const Rect.fromLTWH(0, 0, 200, 80)),
                             ),
                           ),
-                          const SizedBox(width: 12),
-                          ElevatedButton(
-                            onPressed: _addTask,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: accentColor,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 24,
-                                vertical: 16,
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                              elevation: 8,
-                            ),
-                            child: Text(
-                              _texts['submit']!,
-                              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-
-                // Заголовок "Задачи Дзен"
-                Text(
-                  _texts['tasksTitle']!,
-                  style: TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.w300,
-                    color: textColor,
-                  ),
-                ),
-
-                // Кнопки сортировки
-                _buildSortButtons(),
-
-                // Список задач
-                Expanded(
-                  child: _tasks.isEmpty
-                      ? Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
+                          SizedBox(height: verticalSpacing),
+                          Row(
                             children: [
-                              Icon(
-                                Icons.task_alt,
-                                size: 80,
-                                color: secondaryTextColor,
-                              ),
-                              const SizedBox(height: 24),
-                              Text(
-                                _currentLang == 'ru'
-                                    ? 'Задачи пусты'
-                                    : 'No tasks yet',
-                                style: TextStyle(
-                                  color: secondaryTextColor,
-                                  fontSize: 20,
+                              Expanded(
+                                child: TextField(
+                                  controller: _newTaskController,
+                                  style: TextStyle(color: textColor, fontSize: inputFontSize),
+                                  decoration: InputDecoration(
+                                    hintText: _texts['placeholder'],
+                                    hintStyle: TextStyle(color: secondaryTextColor, fontSize: inputFontSize),
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(20),
+                                      borderSide: BorderSide(color: textColor.withOpacity(0.2)),
+                                    ),
+                                    enabledBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(20),
+                                      borderSide: BorderSide(color: textColor.withOpacity(0.2)),
+                                    ),
+                                    focusedBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(20),
+                                      borderSide: BorderSide(color: textColor),
+                                    ),
+                                    filled: true,
+                                    fillColor: surfaceColor,
+                                    contentPadding: EdgeInsets.symmetric(
+                                      horizontal: 20,
+                                      vertical: isWide ? 12 : 16,
+                                    ),
+                                  ),
+                                  onSubmitted: (_) => _addTask(),
                                 ),
                               ),
-                              const SizedBox(height: 8),
-                              Text(
-                                _currentLang == 'ru'
-                                    ? 'Напиши что‑нибудь и нажми Добавить'
-                                    : 'Write something and press Add',
-                                style: TextStyle(
-                                  color: secondaryTextColor.withOpacity(0.7),
-                                  fontSize: 16,
+                              const SizedBox(width: 12),
+                              ElevatedButton(
+                                onPressed: _addTask,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: accentColor,
+                                  foregroundColor: Colors.white,
+                                  padding: EdgeInsets.symmetric(
+                                    horizontal: isWide ? 16 : 24,
+                                    vertical: isWide ? 12 : 16,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  elevation: 8,
+                                ),
+                                child: Text(
+                                  _texts['submit']!,
+                                  style: TextStyle(fontSize: buttonFontSize, fontWeight: FontWeight.w600),
                                 ),
                               ),
                             ],
                           ),
-                        )
-                      : ListView.builder(
-                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                          itemCount: _getSortedTasks().length,
-                          itemBuilder: (context, index) {
-                            final task = _getSortedTasks()[index];
-                            final originalIndex = _tasks.indexWhere((t) => t['id'] == task['id']);
-                            return AnimatedTaskCard(
-                              task: task,
-                              index: originalIndex,
-                              onToggle: _toggleTask,
-                              onDelete: _deleteTask,
-                              onEdit: _editTask,
-                              textColor: textColor,
-                              secondaryTextColor: secondaryTextColor,
-                              surfaceColor: surfaceColor,
-                              accentColor: accentColor,
-                              currentLang: _currentLang,
-                              texts: _texts,
-                              formatDate: _formatDate,
-                            );
-                          },
-                        ),
-                ),
+                        ],
+                      ),
+                    ),
 
-                // Футер (темы, язык, музыка)
-                _buildFooter(),
-              ],
+                    // Заголовок "Задачи Дзен" (тоже адаптивный)
+                    Text(
+                      _texts['tasksTitle']!,
+                      style: TextStyle(
+                        fontSize: tasksTitleFontSize,
+                        fontWeight: FontWeight.w300,
+                        color: textColor,
+                      ),
+                    ),
+
+                    // Кнопки сортировки (можно тоже сделать адаптивными, но пока оставим)
+                    _buildSortButtons(),
+
+                    // Список задач
+                    Expanded(
+                      child: _tasks.isEmpty
+                          ? Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.task_alt,
+                                    size: 80,
+                                    color: secondaryTextColor,
+                                  ),
+                                  const SizedBox(height: 24),
+                                  Text(
+                                    _currentLang == 'ru'
+                                        ? 'Задачи пусты'
+                                        : 'No tasks yet',
+                                    style: TextStyle(
+                                      color: secondaryTextColor,
+                                      fontSize: 20,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    _currentLang == 'ru'
+                                        ? 'Напиши что‑нибудь и нажми Добавить'
+                                        : 'Write something and press Add',
+                                    style: TextStyle(
+                                      color: secondaryTextColor.withOpacity(0.7),
+                                      fontSize: 16,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            )
+                          : ListView.builder(
+                              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                              itemCount: _getSortedTasks().length,
+                              itemBuilder: (context, index) {
+                                final task = _getSortedTasks()[index];
+                                final originalIndex = _tasks.indexWhere((t) => t['id'] == task['id']);
+                                return AnimatedTaskCard(
+                                  task: task,
+                                  index: originalIndex,
+                                  onToggle: _toggleTask,
+                                  onDelete: _deleteTask,
+                                  onEdit: _editTask,
+                                  textColor: textColor,
+                                  secondaryTextColor: secondaryTextColor,
+                                  surfaceColor: surfaceColor,
+                                  accentColor: accentColor,
+                                  currentLang: _currentLang,
+                                  texts: _texts,
+                                  formatDate: _formatDate,
+                                );
+                              },
+                            ),
+                    ),
+
+                    // Адаптивный футер
+                    _buildFooter(),
+                  ],
+                );
+              },
             ),
           ),
         ),
@@ -542,7 +544,6 @@ class _ZenTodoAppState extends State<ZenTodoApp> with TickerProviderStateMixin {
     );
   }
 
-  // Панель сортировки
   Widget _buildSortButtons() {
     final sortModes = [
       'none',
@@ -621,46 +622,51 @@ class _ZenTodoAppState extends State<ZenTodoApp> with TickerProviderStateMixin {
     );
   }
 
-  // Футер
   Widget _buildFooter() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: surfaceColor,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(25)),
-      ),
-      child: SafeArea(
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: [
-            // Темы
-            Row(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isWide = constraints.maxWidth > 600;
+        final verticalPadding = isWide ? 8.0 : 20.0;
+        final buttonSize = isWide ? 36.0 : 48.0;
+        final iconSize = isWide ? 16.0 : 20.0;
+
+        return Container(
+          width: double.infinity,
+          padding: EdgeInsets.symmetric(vertical: verticalPadding, horizontal: 16),
+          decoration: BoxDecoration(
+            color: surfaceColor,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(25)),
+          ),
+          child: SafeArea(
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                _buildThemeButton('japanese', '🌸'),
-                const SizedBox(width: 8),
-                _buildThemeButton('dark', '🌙'),
-                const SizedBox(width: 8),
-                _buildThemeButton('light', '☀️'),
+                Row(
+                  children: [
+                    _buildThemeButton('japanese', '🌸', buttonSize, iconSize),
+                    const SizedBox(width: 8),
+                    _buildThemeButton('dark', '🌙', buttonSize, iconSize),
+                    const SizedBox(width: 8),
+                    _buildThemeButton('light', '☀️', buttonSize, iconSize),
+                  ],
+                ),
+                Row(
+                  children: [
+                    _buildLangButton('ru', buttonSize, iconSize),
+                    const SizedBox(width: 8),
+                    _buildLangButton('en', buttonSize, iconSize),
+                  ],
+                ),
+                _buildMusicButton(buttonSize, iconSize),
               ],
             ),
-            // Язык
-            Row(
-              children: [
-                _buildLangButton('ru'),
-                const SizedBox(width: 8),
-                _buildLangButton('en'),
-              ],
-            ),
-            // Музыка
-            _buildMusicButton(),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 
-  Widget _buildThemeButton(String theme, String icon) {
+  Widget _buildThemeButton(String theme, String icon, double buttonSize, double iconSize) {
     final isActive = _currentTheme == theme;
     return GestureDetector(
       onTap: () {
@@ -670,7 +676,9 @@ class _ZenTodoAppState extends State<ZenTodoApp> with TickerProviderStateMixin {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         curve: Curves.easeOut,
-        padding: const EdgeInsets.all(12),
+        width: buttonSize,
+        height: buttonSize,
+        padding: EdgeInsets.all(buttonSize * 0.2),
         decoration: BoxDecoration(
           gradient: isActive
               ? LinearGradient(colors: _getButtonGradientColors())
@@ -681,18 +689,17 @@ class _ZenTodoAppState extends State<ZenTodoApp> with TickerProviderStateMixin {
             width: 2,
           ),
         ),
-        child: Text(
-          icon,
-          style: TextStyle(
-            fontSize: 20,
-            color: isActive ? Colors.white : textColor.withOpacity(0.6),
+        child: Center(
+          child: Text(
+            icon,
+            style: TextStyle(fontSize: iconSize, color: isActive ? Colors.white : textColor.withOpacity(0.6)),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildLangButton(String lang) {
+  Widget _buildLangButton(String lang, double buttonSize, double iconSize) {
     final isActive = _currentLang == lang;
     return GestureDetector(
       onTap: () {
@@ -705,7 +712,8 @@ class _ZenTodoAppState extends State<ZenTodoApp> with TickerProviderStateMixin {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         curve: Curves.easeOut,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        height: buttonSize * 0.8,
+        padding: EdgeInsets.symmetric(horizontal: buttonSize * 0.4, vertical: buttonSize * 0.2),
         decoration: BoxDecoration(
           gradient: isActive
               ? LinearGradient(colors: _getButtonGradientColors())
@@ -716,24 +724,28 @@ class _ZenTodoAppState extends State<ZenTodoApp> with TickerProviderStateMixin {
             width: 2,
           ),
         ),
-        child: Text(
-          lang.toUpperCase(),
-          style: TextStyle(
-            color: isActive ? Colors.white : textColor.withOpacity(0.6),
-            fontWeight: FontWeight.w700,
-            fontSize: 14,
+        child: Center(
+          child: Text(
+            lang.toUpperCase(),
+            style: TextStyle(
+              color: isActive ? Colors.white : textColor.withOpacity(0.6),
+              fontWeight: FontWeight.w700,
+              fontSize: iconSize * 0.8,
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildMusicButton() {
+  Widget _buildMusicButton(double buttonSize, double iconSize) {
     return GestureDetector(
       onTap: _toggleMusic,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.all(12),
+        width: buttonSize,
+        height: buttonSize,
+        padding: EdgeInsets.all(buttonSize * 0.2),
         decoration: BoxDecoration(
           color: _isMusicPlaying ? accentColor : surfaceColor,
           shape: BoxShape.circle,
@@ -745,7 +757,7 @@ class _ZenTodoAppState extends State<ZenTodoApp> with TickerProviderStateMixin {
         child: Icon(
           _isMusicPlaying ? Icons.music_note : Icons.music_off,
           color: _isMusicPlaying ? Colors.white : textColor.withOpacity(0.6),
-          size: 20,
+          size: iconSize,
         ),
       ),
     );
@@ -754,7 +766,6 @@ class _ZenTodoAppState extends State<ZenTodoApp> with TickerProviderStateMixin {
   List<Color> _getTitleGradientColors() {
     switch (_currentTheme) {
       case 'japanese':
-        // Более контрастный градиент для японской темы
         return const [Color(0xFFFFF0F5), Color(0xFFFFB6C1), Colors.white];
       case 'dark':
         return const [Color(0xFFEC4899), Color(0xFF8B5CF6)];
@@ -777,7 +788,6 @@ class _ZenTodoAppState extends State<ZenTodoApp> with TickerProviderStateMixin {
   }
 }
 
-// Анимированная карточка задачи (без изменений)
 class AnimatedTaskCard extends StatefulWidget {
   final Map<String, dynamic> task;
   final int index;
