@@ -26,7 +26,7 @@ class _ZenTodoAppState extends State<ZenTodoApp> with TickerProviderStateMixin {
   late Animation<double> _gradientAnimation;
 
   final AudioPlayer _audioPlayer = AudioPlayer();
-  bool _isMusicPlaying = false;
+  bool _isMusicPlaying = true;
 
   late Map<String, String> _texts;
   final Map<String, Map<String, String>> _allTexts = {
